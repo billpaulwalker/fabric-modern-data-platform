@@ -1,0 +1,9 @@
+source_id,source_system,source_type,source_object,target_bronze_table,load_type,watermark_column,is_active,load_frequency
+1,CRE_SQL,SQL,properties,bronze_properties,full,,1,daily
+2,CRE_SQL,SQL,tenants,bronze_tenants,full,,1,daily
+3,CRE_SQL,SQL,leases,bronze_leases,incremental,updated_at,1,daily
+4,CRE_SQL,SQL,rent_payments,bronze_rent_payments,incremental,payment_date,1,daily
+5,CRE_SQL,SQL,maintenance_requests,bronze_maintenance_requests,incremental,updated_at,1,daily
+6,OpenWeather,API,weather,bronze_weather_api_raw,incremental,observation_timestamp,1,daily
+7,BusinessFiles,CSV,property_budget.csv,bronze_property_budget,full,,1,monthly
+8,BusinessFiles,CSV,property_region_mapping.csv,bronze_property_region_mapping,full,,1,monthly

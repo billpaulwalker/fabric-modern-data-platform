@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets
+.env
+*.key
+
+# Local data outputs
+data/output/
+data/bronze/
+data/silver/
+data/gold/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Power BI local artifacts
+*.pbix
+*.pbit

@@ -1,0 +1,7 @@
+table_id,source_system,source_object,bronze_table,silver_table,gold_table,primary_key,load_type,is_active
+1,CRE_SQL,properties,bronze_properties,silver_properties,dim_property,property_id,full,1
+2,CRE_SQL,tenants,bronze_tenants,silver_tenants,dim_tenant,tenant_id,full,1
+3,CRE_SQL,leases,bronze_leases,silver_leases,fact_lease,lease_id,incremental,1
+4,CRE_SQL,rent_payments,bronze_rent_payments,silver_rent_payments,fact_rent_payment,payment_id,incremental,1
+5,CRE_SQL,maintenance_requests,bronze_maintenance_requests,silver_maintenance_requests,fact_maintenance_request,request_id,incremental,1
+6,OpenWeather,weather,bronze_weather_api_raw,silver_weather_observations,fact_property_daily_metric,weather_observation_id,incremental,1

@@ -1,0 +1,11 @@
+{
+  "environment": "dev",
+  "lakehouse_name": "lh_fabric_modern_data_platform_dev",
+  "workspace_name": "fabric-modern-data-platform-dev",
+  "bronze_schema": "bronze",
+  "silver_schema": "silver",
+  "gold_schema": "gold",
+  "api_base_url": "https://api.openweathermap.org",
+  "api_key_secret_name": "OPENWEATHER_API_KEY",
+  "log_level": "INFO"
+}

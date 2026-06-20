@@ -1,0 +1,62 @@
+name: Repository Validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate required folders
+        run: |
+          test -d architecture
+          test -d config
+          test -d data/sample
+          test -d notebooks
+          test -d src
+          test -d sql
+          test -d powerbi
+          test -d pipelines
+          test -d deployment
+          test -d docs
+          test -d tests
+
+      - name: Validate required files
+        run: |
+          test -f README.md
+          test -f config/source_config.csv
+          test -f sql/create_control_tables.sql
+          test -f sql/create_logging_tables.sql
+          test -f sql/create_watermark_tables.sql
+
+      - name: Check that secrets are not committed
+        run: |
+          if find . -name ".env" | grep -q .; then
+            echo ".env file found. Do not commit secrets."
+            exit 1
+          fi
+
+      - name: Compile Python files
+        run: |
+          python -m compileall src notebooks tests
+
+      - name: Run unit tests
+        run: |
+          pytest

@@ -1,0 +1,6 @@
+property_id,property_name,property_type,city,state,postal_code,square_feet,property_status,acquired_date,updated_at
+101,Carmel Valley Plaza,Retail,San Diego,CA,92130,125000,Active,2023-01-15,2026-06-01T09:00:00
+102,Poway Business Center,Office,Poway,CA,92064,210000,Active,2021-08-01,2026-06-01T09:05:00
+103,Mission Valley Offices,Office,San Diego,CA,92108,185000,Active,2022-03-01,2026-06-01T09:10:00
+104,Oceanside Industrial Park,Industrial,Oceanside,CA,92054,310000,Active,2020-10-20,2026-06-01T09:15:00
+105,Coronado Mixed Use,Mixed Use,Coronado,CA,92118,95000,Active,2024-02-10,2026-06-01T09:20:00
