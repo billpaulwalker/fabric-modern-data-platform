@@ -270,6 +270,34 @@ This repository is built phase by phase.
 
 Review the scaffold, documentation placeholders, sample data, starter SQL, starter Python modules, and GitHub Actions workflow.
 
+### Phase 2: Bronze Ingestion
+
+Run the Bronze ingestion scripts from the repository root:
+
+```powershell
+python notebooks/01_bronze_sql_ingestion.py
+python notebooks/02_bronze_api_ingestion.py
+python notebooks/03_bronze_file_ingestion.py
+```
+
+These scripts generate raw Bronze outputs in:
+
+```text
+data/bronze/
+```
+
+The Bronze layer lands SQL-style, API-style, and file-style source data with standard audit columns:
+
+- source_system
+- source_object
+- source_file_name
+- ingestion_timestamp
+- pipeline_run_id
+- load_type
+- raw_record_hash
+
+The generated `data/bronze/` folder is ignored by Git because it represents local run output.
+
 ### Later Phases
 
 Detailed run instructions will be added as the Bronze, Silver, Gold, validation, Power BI, and deployment phases are implemented.
