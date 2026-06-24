@@ -1,0 +1,56 @@
+{
+  "pipeline_name": "pl_cre_end_to_end",
+  "audit_directory": "data/operations",
+  "steps": [
+    {
+      "name": "bronze_sql",
+      "command": ["notebooks/01_bronze_sql_ingestion.py"],
+      "depends_on": [],
+      "max_attempts": 1,
+      "timeout_seconds": 300
+    },
+    {
+      "name": "bronze_api",
+      "command": ["notebooks/02_bronze_api_ingestion.py"],
+      "depends_on": [],
+      "max_attempts": 3,
+      "retry_delay_seconds": 2,
+      "timeout_seconds": 300
+    },
+    {
+      "name": "bronze_files",
+      "command": ["notebooks/03_bronze_file_ingestion.py"],
+      "depends_on": [],
+      "max_attempts": 1,
+      "timeout_seconds": 300
+    },
+    {
+      "name": "silver_transformations",
+      "command": ["notebooks/04_silver_transformations.py"],
+      "depends_on": ["bronze_sql", "bronze_api", "bronze_files"],
+      "max_attempts": 1,
+      "timeout_seconds": 600
+    },
+    {
+      "name": "gold_dimensional_model",
+      "command": ["notebooks/05_gold_dimensional_model.py"],
+      "depends_on": ["silver_transformations"],
+      "max_attempts": 1,
+      "timeout_seconds": 600
+    },
+    {
+      "name": "semantic_validation",
+      "command": ["notebooks/06_validate_semantic_model.py"],
+      "depends_on": ["gold_dimensional_model"],
+      "max_attempts": 1,
+      "timeout_seconds": 300
+    },
+    {
+      "name": "unit_tests",
+      "command": ["-m", "pytest"],
+      "depends_on": ["semantic_validation"],
+      "max_attempts": 1,
+      "timeout_seconds": 600
+    }
+  ]
+}

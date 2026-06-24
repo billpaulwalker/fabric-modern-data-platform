@@ -1,0 +1,40 @@
+{
+  "name": "pl_cre_end_to_end",
+  "purpose": "Logical implementation manifest for a Microsoft Fabric Data Pipeline",
+  "parameters": ["environment", "pipeline_run_id"],
+  "activities": [
+    {"name": "nb_bronze_sql", "type": "Notebook", "depends_on": [], "retry": 0, "timeout_minutes": 30},
+    {"name": "nb_bronze_api", "type": "Notebook", "depends_on": [], "retry": 2, "timeout_minutes": 30},
+    {"name": "nb_bronze_files", "type": "Notebook", "depends_on": [], "retry": 0, "timeout_minutes": 30},
+    {
+      "name": "nb_silver_transformations",
+      "type": "Notebook",
+      "depends_on": ["nb_bronze_sql", "nb_bronze_api", "nb_bronze_files"],
+      "dependency_condition": "Succeeded",
+      "retry": 0,
+      "timeout_minutes": 45
+    },
+    {
+      "name": "nb_gold_dimensional_model",
+      "type": "Notebook",
+      "depends_on": ["nb_silver_transformations"],
+      "dependency_condition": "Succeeded",
+      "retry": 0,
+      "timeout_minutes": 45
+    },
+    {
+      "name": "nb_semantic_validation",
+      "type": "Notebook",
+      "depends_on": ["nb_gold_dimensional_model"],
+      "dependency_condition": "Succeeded",
+      "retry": 0,
+      "timeout_minutes": 15
+    },
+    {
+      "name": "log_pipeline_failure",
+      "type": "StoredProcedureOrNotebook",
+      "depends_on": ["nb_bronze_sql", "nb_bronze_api", "nb_bronze_files", "nb_silver_transformations", "nb_gold_dimensional_model", "nb_semantic_validation"],
+      "dependency_condition": "FailedOrSkipped"
+    }
+  ]
+}
