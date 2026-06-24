@@ -1,0 +1,124 @@
+{
+  "tables": [
+    {
+      "name": "properties",
+      "input_format": "csv",
+      "primary_key": ["property_id"],
+      "required_columns": ["property_id"],
+      "column_types": {
+        "property_id": "integer",
+        "square_feet": "decimal",
+        "acquired_date": "date",
+        "updated_at": "datetime",
+        "ingestion_timestamp": "datetime"
+      },
+      "non_negative_columns": ["square_feet"]
+    },
+    {
+      "name": "tenants",
+      "input_format": "csv",
+      "primary_key": ["tenant_id"],
+      "required_columns": ["tenant_id"],
+      "column_types": {
+        "tenant_id": "integer",
+        "tenant_start_date": "date",
+        "updated_at": "datetime",
+        "ingestion_timestamp": "datetime"
+      }
+    },
+    {
+      "name": "leases",
+      "input_format": "csv",
+      "primary_key": ["lease_id"],
+      "required_columns": ["lease_id", "property_id", "tenant_id"],
+      "column_types": {
+        "lease_id": "integer",
+        "property_id": "integer",
+        "tenant_id": "integer",
+        "lease_start_date": "date",
+        "lease_end_date": "date",
+        "monthly_rent": "decimal",
+        "updated_at": "datetime",
+        "ingestion_timestamp": "datetime"
+      },
+      "non_negative_columns": ["monthly_rent"],
+      "date_order_rules": [["lease_start_date", "lease_end_date"]]
+    },
+    {
+      "name": "rent_payments",
+      "input_format": "csv",
+      "primary_key": ["payment_id"],
+      "required_columns": ["payment_id", "lease_id"],
+      "column_types": {
+        "payment_id": "integer",
+        "lease_id": "integer",
+        "payment_date": "date",
+        "amount_due": "decimal",
+        "amount_paid": "decimal",
+        "updated_at": "datetime",
+        "ingestion_timestamp": "datetime"
+      },
+      "non_negative_columns": ["amount_due", "amount_paid"]
+    },
+    {
+      "name": "maintenance_requests",
+      "input_format": "csv",
+      "primary_key": ["request_id"],
+      "required_columns": ["request_id", "property_id"],
+      "column_types": {
+        "request_id": "integer",
+        "property_id": "integer",
+        "request_date": "date",
+        "completed_date": "date",
+        "estimated_cost": "decimal",
+        "actual_cost": "decimal",
+        "updated_at": "datetime",
+        "ingestion_timestamp": "datetime"
+      },
+      "non_negative_columns": ["estimated_cost", "actual_cost"],
+      "date_order_rules": [["request_date", "completed_date"]]
+    },
+    {
+      "name": "property_budget",
+      "input_format": "csv",
+      "primary_key": ["property_id", "budget_year"],
+      "required_columns": ["property_id"],
+      "column_types": {
+        "property_id": "integer",
+        "budget_year": "integer",
+        "budget_month": "integer",
+        "budget_revenue": "decimal",
+        "budget_expense": "decimal",
+        "budget_amount": "decimal",
+        "ingestion_timestamp": "datetime"
+      },
+      "non_negative_columns": ["budget_revenue", "budget_expense", "budget_amount"]
+    },
+    {
+      "name": "property_region_mapping",
+      "input_format": "csv",
+      "primary_key": ["property_id"],
+      "required_columns": ["property_id"],
+      "column_types": {
+        "property_id": "integer",
+        "ingestion_timestamp": "datetime"
+      }
+    },
+    {
+      "name": "weather_api_raw",
+      "input_format": "jsonl",
+      "primary_key": ["property_id", "observation_timestamp"],
+      "required_columns": ["property_id", "observation_timestamp"],
+      "column_types": {
+        "property_id": "integer",
+        "observation_timestamp": "datetime",
+        "main_temp": "decimal",
+        "main_feels_like": "decimal",
+        "main_humidity": "decimal",
+        "wind_speed": "decimal",
+        "ingestion_timestamp": "datetime"
+      },
+      "non_negative_columns": ["main_humidity", "wind_speed"]
+    }
+  ]
+}

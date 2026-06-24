@@ -14,6 +14,7 @@ data/output/
 data/bronze/
 data/silver/
 data/gold/
+data/rejected/
 
 # OS / editor
 .DS_Store
