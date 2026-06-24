@@ -298,6 +298,32 @@ The Bronze layer lands SQL-style, API-style, and file-style source data with sta
 
 The generated `data/bronze/` folder is ignored by Git because it represents local run output.
 
+### Phase 3: Silver Transformations
+
+After running the Phase 2 Bronze scripts, execute:
+
+```powershell
+python notebooks/04_silver_transformations.py
+python -m pytest
+```
+
+Silver processing standardizes column names and data types, validates required fields and business rules, removes duplicate business keys using latest-record-wins logic, preserves Bronze lineage columns, and writes rejected records with explicit reasons.
+
+Local generated outputs are written to `data/silver/` and `data/rejected/`. The Fabric version in `notebooks/fabric/04_silver_transformations_pyspark.py` writes managed Delta tables to `silver` and `silver_quarantine` schemas.
+
+### Phase 4: Gold Dimensional Model
+
+After completing Phase 3, build the Power BI-ready star schema:
+
+```powershell
+python notebooks/05_gold_dimensional_model.py
+python -m pytest
+```
+
+The Gold layer contains conformed property, tenant, and date dimensions plus lease, rent payment, maintenance, and property budget facts. It implements deterministic surrogate keys, unknown members, declared fact grains, dimensional lookups, and reusable financial measures.
+
+Local outputs are written to `data/gold/`. The Fabric notebook writes managed Delta tables to the `gold` schema for Direct Lake consumption.
+
 ### Later Phases
 
 Detailed run instructions will be added as the Bronze, Silver, Gold, validation, Power BI, and deployment phases are implemented.

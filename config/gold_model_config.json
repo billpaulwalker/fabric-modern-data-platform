@@ -1,0 +1,15 @@
+{
+  "date_dimension": {
+    "start_date": "2024-01-01",
+    "end_date": "2030-12-31"
+  },
+  "models": [
+    {"name": "dim_property", "grain": "One row per property", "business_key": ["property_id"]},
+    {"name": "dim_tenant", "grain": "One row per tenant", "business_key": ["tenant_id"]},
+    {"name": "dim_date", "grain": "One row per calendar date", "business_key": ["full_date"]},
+    {"name": "fact_lease", "grain": "One row per lease", "business_key": ["lease_id"]},
+    {"name": "fact_rent_payment", "grain": "One row per rent payment", "business_key": ["payment_id"]},
+    {"name": "fact_maintenance_request", "grain": "One row per maintenance request", "business_key": ["request_id"]},
+    {"name": "fact_property_budget", "grain": "One row per property and budget period", "business_key": ["property_id", "budget_year", "budget_month"]}
+  ]
+}
