@@ -2,277 +2,315 @@
 
 ## Project Summary
 
-This repository demonstrates an end-to-end Microsoft Fabric lakehouse platform for Commercial Real Estate operations and finance analytics.
+This repository demonstrates an end-to-end, production-shaped Microsoft Fabric lakehouse platform for Commercial Real Estate operations and finance analytics.
 
-The project is designed to show senior data engineering capabilities across:
+The completed seven-phase project demonstrates:
 
-- SQL and file ingestion
-- REST API ingestion
-- Metadata-driven orchestration concepts
+- SQL-style, REST API-style, and business-file ingestion
 - Bronze, Silver, and Gold medallion architecture
-- Delta table design patterns
-- Data validation and pipeline logging
-- Power BI-ready star schema modeling
-- Git-based development workflow
-- Dev/Test/Prod deployment strategy
+- Standard audit columns and raw-record hashing
+- Configuration-driven data contracts
+- Data validation, quarantine, and full-key deduplication
+- Power BI-ready dimensional modeling
+- Direct Lake semantic-model design and governed DAX measures
+- Dependency-aware orchestration, retry handling, and audit logging
+- Automated testing and GitHub Actions validation
+- Dev/Test/Prod release gates, packaging, and rollback planning
 
-> Phase 1 creates the repository scaffold, documentation framework, starter sample data, starter SQL scripts, starter Python modules, and placeholder notebooks.
+The repository contains two complementary implementations:
+
+1. **Local Python/pandas execution** for learning, unit testing, CI, and demonstration without requiring a Fabric capacity.
+2. **Fabric PySpark/Delta implementations and build specifications** for deployment into a schema-enabled Fabric Lakehouse.
 
 ## Business Scenario
 
-A commercial real estate company manages properties, tenants, leases, rent payments, maintenance requests, budgets, and external weather data.
+A Commercial Real Estate company manages properties, tenants, leases, rent payments, maintenance requests, monthly budgets, business regions, and external weather observations.
 
-The business needs trusted reporting for:
+The platform supports trusted analysis of:
 
-- Rent collections
-- Occupancy
-- Property performance
-- Tenant activity
-- Overdue payments
-- Maintenance operations
-- Portfolio-level analytics
+- Rent collections and outstanding balances
+- Lease portfolio and contracted rent
+- Property and tenant activity
+- Maintenance volume, cost, and resolution time
+- Property budgets and budget-versus-actual performance
+- Portfolio performance by property, market, and region
 - Data quality and pipeline health
 
 ## Architecture
 
-Source systems include simulated SQL operational tables, REST API weather data, CSV/Excel extracts, and business reference files.
-
-```text
-Source Systems
-  ├── SQL Server / Azure SQL sample database
-  ├── REST API source
-  ├── CSV / Excel files
-  └── Reference data
-
-        ↓
-
-Ingestion Layer
-  ├── Metadata-driven source config
-  ├── ADF-style orchestration concepts
-  ├── Fabric pipeline design
-  ├── Python API ingestion
-  └── Watermark tracking
-
-        ↓
-
-Bronze Layer
-  ├── Raw SQL extracts
-  ├── Raw API JSON
-  ├── Raw CSV files
-  └── Ingestion audit columns
-
-        ↓
-
-Silver Layer
-  ├── Cleaned and standardized tables
-  ├── Deduplication
-  ├── JSON flattening
-  ├── Type casting
-  ├── Business rule standardization
-  └── Data quality checks
-
-        ↓
-
-Gold Layer
-  ├── Dimensions
-  ├── Facts
-  ├── Star schema
-  └── Power BI-ready model
-
-        ↓
-
-Power BI / Semantic Model
-  ├── Relationships
-  ├── DAX measures
-  ├── Direct Lake or Import-ready model
-  └── Executive dashboard
-
-        ↓
-
-Production Layer
-  ├── Logging
-  ├── Validation
-  ├── Monitoring
-  ├── Git
-  ├── Pull requests
-  ├── Dev/Test/Prod promotion
-  └── Deployment checklist
+```mermaid
+flowchart TD
+    S["SQL-style extracts, API JSON, and business CSV files"] --> B["Bronze: raw source-aligned data"]
+    B --> SI["Silver: typed, validated, and deduplicated data"]
+    SI --> G["Gold: conformed dimensions and facts"]
+    G --> SM["Direct Lake semantic model"]
+    SM --> R["Power BI report"]
+    P["Fabric pipeline and local orchestrator"] --> B
+    P --> SI
+    P --> G
+    CI["GitHub Actions and release gates"] --> P
 ```
 
-## Tools Used
+### Fabric Target Architecture
 
-- Microsoft Fabric Lakehouse
-- Microsoft Fabric notebooks
-- Python
-- PySpark
-- Delta Lake
-- Fabric pipelines
-- Azure Data Factory orchestration concepts
-- SQL
-- Power BI
-- Git / GitHub
+| Layer | Fabric implementation | Responsibility |
+|---|---|---|
+| Ingestion | Fabric notebooks and Data Pipeline | Read sources, coordinate activities, propagate run IDs |
+| Bronze | Managed Delta tables in `bronze` | Preserve raw records and ingestion lineage |
+| Silver | Managed Delta tables in `silver` | Standardize, validate, quarantine, and deduplicate |
+| Gold | Managed Delta tables in `gold` | Publish dimensions, facts, keys, and business measures |
+| Semantic | Power BI Direct Lake semantic model | Relationships, DAX, formatting, and governed consumption |
+| Operations | Pipeline logs, metrics, health report, runbooks | Monitoring, diagnosis, recovery, and audit evidence |
+| Delivery | GitHub Actions or Azure DevOps plus Fabric deployment pipelines | Validate, approve, package, promote, and roll back |
+
+## Technologies
+
+- Microsoft Fabric Lakehouse and OneLake
+- Microsoft Fabric notebooks and Data Pipelines
+- Delta Lake and PySpark
+- Python and pandas
+- SQL and Lakehouse SQL analytics endpoint
+- Power BI and DAX
+- Direct Lake semantic models
+- Git and GitHub
 - GitHub Actions
+- Azure DevOps pipeline template
+- pytest
 
 ## Data Sources
 
 | Source | Type | Description |
 |---|---|---|
-| properties | CSV / simulated SQL | Property master data |
-| tenants | CSV / simulated SQL | Tenant master data |
-| leases | CSV / simulated SQL | Lease contracts |
-| rent_payments | CSV / simulated SQL | Rent payment transactions |
-| maintenance_requests | CSV / simulated SQL | Property maintenance operations |
-| property_budget | CSV reference | Property-level monthly budget |
-| property_region_mapping | CSV reference | Business region enrichment |
-| OpenWeather API | REST API | Weather enrichment for property operations |
+| `properties` | CSV simulating SQL extraction | Property master data |
+| `tenants` | CSV simulating SQL extraction | Tenant master data |
+| `leases` | CSV simulating SQL extraction | Lease contracts |
+| `rent_payments` | CSV simulating SQL extraction | Rent payment transactions |
+| `maintenance_requests` | CSV simulating SQL extraction | Property maintenance operations |
+| `property_budget` | Business CSV | Property-level monthly budgets |
+| `property_region_mapping` | Reference CSV | Region and market enrichment |
+| OpenWeather sample | REST API-style JSON | Weather enrichment example without committed credentials |
 
-## Medallion Design
+## Medallion Architecture
 
 ### Bronze
 
-Bronze preserves raw source data with ingestion audit fields.
+Bronze preserves source-aligned records and adds standardized audit metadata:
 
-Example Bronze tables:
+- `source_system`
+- `source_object`
+- `source_file_name`
+- `ingestion_timestamp`
+- `pipeline_run_id`
+- `load_type`
+- `raw_record_hash`
 
-- bronze_properties
-- bronze_tenants
-- bronze_leases
-- bronze_rent_payments
-- bronze_maintenance_requests
-- bronze_weather_api_raw
-- bronze_property_budget
-- bronze_property_region_mapping
+Local Bronze outputs include:
+
+- `bronze_properties.csv`
+- `bronze_tenants.csv`
+- `bronze_leases.csv`
+- `bronze_rent_payments.csv`
+- `bronze_maintenance_requests.csv`
+- `bronze_property_budget.csv`
+- `bronze_property_region_mapping.csv`
+- `bronze_weather_api_raw.jsonl`
 
 ### Silver
 
-Silver cleans and standardizes source data.
+Silver applies configuration-driven processing:
 
-Example Silver tables:
+- Snake-case column normalization
+- Blank-to-null standardization
+- Data-type casting
+- Required-field validation
+- Numeric and date-order checks
+- Record-level rejection reasons
+- Latest-record-wins deduplication using complete business keys
+- Bronze lineage preservation
 
-- silver_properties
-- silver_tenants
-- silver_leases
-- silver_rent_payments
-- silver_maintenance_requests
-- silver_weather_observations
-- silver_property_budget
-- silver_property_region_mapping
+Valid local outputs are written to `data/silver/`; rejected records are written to `data/rejected/`. The Fabric notebook writes Delta tables to `silver` and rejected data to `silver_quarantine.rejected_records`.
+
+The monthly budget grain is explicitly defined as:
+
+```text
+property_id + budget_month
+```
+
+This preserves all property-month records rather than incorrectly collapsing them to one record per property.
 
 ### Gold
 
-Gold is modeled for reporting and semantic model consumption.
+Gold publishes a tested star schema.
 
-Example Gold tables:
+**Dimensions**
 
-- dim_property
-- dim_tenant
-- dim_date
-- dim_region
-- fact_lease
-- fact_rent_payment
-- fact_maintenance_request
-- fact_property_daily_metric
+- `dim_property`
+- `dim_tenant`
+- `dim_date`
 
-## Ingestion Patterns
+**Facts**
 
-This project will demonstrate:
+- `fact_lease`
+- `fact_rent_payment`
+- `fact_maintenance_request`
+- `fact_property_budget`
 
-- Full loads
-- Incremental loads
-- Watermark-based ingestion
-- Raw landing patterns
-- Metadata-driven table loading
-- Logging and row-count capture
-- Validation gates
+The model implements deterministic surrogate keys, key `0` unknown members, conformed dimensions, declared fact grains, date keys, and relationship validation.
 
-## API Ingestion
+Budget calculations use the actual source contract:
 
-The API pattern will demonstrate:
-
-- API authentication
-- Parameters
-- Pagination or simulated pagination
-- Retry handling
-- Rate limit handling
-- Status code handling
-- Raw JSON landing
-- JSON flattening
-- Watermark updates
-- Pipeline logging
-
-## Incremental Loading
-
-Incremental loading will use:
-
-- `ingestion_watermark`
-- `watermark_column`
-- `last_successful_value`
-- `last_successful_run_id`
-- MERGE/upsert concepts into Delta tables
-
-## Validation and Logging
-
-The project includes starter scripts and utilities for:
-
-- Required field validation
-- Duplicate detection
-- Row count comparison
-- Rejected record handling
-- Pipeline run logging
-- Source-to-target validation
-
-## Gold Model
-
-The Gold layer will use a star schema designed for Power BI reporting.
-
-Primary facts:
-
-- fact_lease
-- fact_rent_payment
-- fact_maintenance_request
-- fact_property_daily_metric
-
-Primary dimensions:
-
-- dim_property
-- dim_tenant
-- dim_date
-- dim_region
+```text
+budget_revenue = budgeted_rent
+budget_expense = budgeted_maintenance + budgeted_operating_expense
+budget_noi = budget_revenue - budget_expense
+```
 
 ## Power BI Semantic Model
 
-Planned report pages:
+The version-controlled semantic contract defines:
+
+- Seven Gold tables
+- Twelve one-to-many relationships
+- Active primary-date relationships
+- Inactive lease-end and maintenance-completion relationships
+- Governed DAX measures
+- Hidden technical fields
+- Measure formatting
+- Direct Lake decision guidance
+- Security and RLS design notes
+
+Planned report implementation:
 
 1. Executive Overview
-2. Property Performance
-3. Rent Collections
-4. Tenant Detail
-5. Maintenance Operations
-6. Data Quality / Pipeline Health
+2. Rent Collections
+3. Lease Portfolio
+4. Maintenance Operations
+5. Budget Versus Actual
+6. Data Quality
 
-## Dev/Test/Prod Deployment
+Follow `powerbi/semantic-model/build-guide.md` to create the semantic model and report in Fabric.
 
-Planned Fabric workspaces:
+## Orchestration and Observability
 
-- fabric-modern-data-platform-dev
-- fabric-modern-data-platform-test
-- fabric-modern-data-platform-prod
+`pl_cre_end_to_end` coordinates:
+
+The SQL, API, and file Bronze activities must all succeed before Silver runs. Silver is followed by Gold, semantic validation, and unit tests.
+
+The orchestration framework includes:
+
+- Dependency validation
+- Shared pipeline run IDs
+- Bounded API retries
+- Execution timeouts
+- Failure propagation and downstream skipping
+- Pipeline- and step-level JSONL audit logs
+- Captured status, attempt, duration, return code, and bounded error details
+- Operations health reporting
+
+The local runner mirrors the Fabric activity graph. `pipelines/fabric-pipeline-manifest.json` is a logical build specification, not an exported Fabric deployment definition.
+
+## Testing and Validation
+
+Automated tests cover:
+
+- Stable raw-record hashes
+- Bronze audit columns
+- Silver casting, validation, quarantine, and full-key deduplication
+- Gold surrogate keys, unknown members, grain, and calculations
+- Semantic-model table and relationship contracts
+- DAX measure inventory
+- Orchestration retries, failures, and skipped dependencies
+- Release validation, evidence gates, and checksummed packaging
+
+SQL acceptance queries provide deployed-table checks through the Lakehouse SQL analytics endpoint.
+
+Run all tests with:
+
+```powershell
+python -m pytest
+```
+
+## Dev/Test/Prod Delivery
+
+| Stage | Workspace | Lakehouse | Schedule |
+|---|---|---|---|
+| Development | `ws-cre-modernization-dev` | `lh_cre_dev` | Disabled |
+| Test | `ws-cre-modernization-test` | `lh_cre_test` | Disabled |
+| Production | `ws-cre-modernization-prod` | `lh_cre_prod` | Enabled after validation |
+
+The delivery model uses:
+
+- Git and pull requests as the source-control workflow
+- GitHub Actions as the primary CI implementation
+- An Azure DevOps staged-pipeline equivalent
+- Fabric deployment pipelines for workspace artifact promotion
+- Environment-specific deployment rules
+- Protected Test and Production approvals
+- Versioned, checksummed release packages
+- Post-deployment validation and rollback runbooks
 
 ## Repository Structure
 
-See the folder structure in this repository for architecture docs, configuration, sample data, notebooks, reusable Python modules, SQL scripts, Power BI notes, pipeline design, deployment documentation, tests, and GitHub Actions validation.
+- `.github/workflows/`: repository, end-to-end, and release automation
+- `architecture/`: architecture and source-to-target documentation
+- `config/`: source, Silver, Gold, semantic, pipeline, and environment contracts
+- `data/`: committed samples and ignored generated outputs
+- `deployment/`: promotion rules, checklists, Azure pipeline, and rollback
+- `docs/`: phase guides, operations guidance, and case-study material
+- `notebooks/`: local phase runners and Fabric PySpark/Delta implementations
+- `pipelines/`: Fabric pipeline design manifest
+- `powerbi/`: semantic model, DAX, report design, and theme
+- `scripts/`: release validation, gates, and packaging
+- `sql/`: DDL and acceptance queries
+- `src/`: reusable ingestion, transformation, orchestration, and deployment logic
+- `tests/`: unit and contract tests
 
-## How to Run
+## Quick Start
 
-This repository is built phase by phase.
+### 1. Create the environment
 
-### Phase 1
+From the repository root:
 
-Review the scaffold, documentation placeholders, sample data, starter SQL, starter Python modules, and GitHub Actions workflow.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### 2. Run the complete local platform
+
+```powershell
+python notebooks/07_run_end_to_end_pipeline.py
+```
+
+This executes all ingestion and transformation phases, semantic validation, and unit tests.
+
+### 3. Review operational health
+
+```powershell
+python notebooks/08_pipeline_health_report.py
+```
+
+Generated outputs are written beneath:
+
+```text
+data/bronze/
+data/silver/
+data/rejected/
+data/gold/
+data/operations/
+```
+
+These directories represent local execution output and should remain ignored by Git.
+
+## Phase-by-Phase Execution
+
+### Phase 1: Repository Foundation
+
+Review the structure, sample data, configuration, starter utilities, documentation, tests, and GitHub Actions workflow.
 
 ### Phase 2: Bronze Ingestion
-
-Run the Bronze ingestion scripts from the repository root:
 
 ```powershell
 python notebooks/01_bronze_sql_ingestion.py
@@ -280,93 +318,92 @@ python notebooks/02_bronze_api_ingestion.py
 python notebooks/03_bronze_file_ingestion.py
 ```
 
-These scripts generate raw Bronze outputs in:
-
-```text
-data/bronze/
-```
-
-The Bronze layer lands SQL-style, API-style, and file-style source data with standard audit columns:
-
-- source_system
-- source_object
-- source_file_name
-- ingestion_timestamp
-- pipeline_run_id
-- load_type
-- raw_record_hash
-
-The generated `data/bronze/` folder is ignored by Git because it represents local run output.
-
 ### Phase 3: Silver Transformations
-
-After running the Phase 2 Bronze scripts, execute:
 
 ```powershell
 python notebooks/04_silver_transformations.py
 python -m pytest
 ```
 
-Silver processing standardizes column names and data types, validates required fields and business rules, removes duplicate business keys using latest-record-wins logic, preserves Bronze lineage columns, and writes rejected records with explicit reasons.
-
-Local generated outputs are written to `data/silver/` and `data/rejected/`. The Fabric version in `notebooks/fabric/04_silver_transformations_pyspark.py` writes managed Delta tables to `silver` and `silver_quarantine` schemas.
-
 ### Phase 4: Gold Dimensional Model
-
-After completing Phase 3, build the Power BI-ready star schema:
 
 ```powershell
 python notebooks/05_gold_dimensional_model.py
 python -m pytest
 ```
 
-The Gold layer contains conformed property, tenant, and date dimensions plus lease, rent payment, maintenance, and property budget facts. It implements deterministic surrogate keys, unknown members, declared fact grains, dimensional lookups, and reusable financial measures.
-
-Local outputs are written to `data/gold/`. The Fabric notebook writes managed Delta tables to the `gold` schema for Direct Lake consumption.
-
 ### Phase 5: Power BI Semantic Model
-
-Validate the Gold layer against the version-controlled semantic model:
 
 ```powershell
 python notebooks/06_validate_semantic_model.py
 python -m pytest
 ```
 
-The Power BI assets define a Direct Lake semantic model, conformed relationships, governed DAX measures, formatting, security guidance, and six report pages. Follow `powerbi/semantic-model/build-guide.md` to implement the model in Fabric.
+Expected validation result:
+
+```json
+{
+  "model_name": "CRE Portfolio Analytics",
+  "passed": true
+}
+```
 
 ### Phase 6: Orchestration and Observability
-
-Run the complete platform under one audited pipeline execution:
 
 ```powershell
 python notebooks/07_run_end_to_end_pipeline.py
 python notebooks/08_pipeline_health_report.py
 ```
 
-The pipeline applies ADF/Fabric-style activity dependencies, bounded API retries, failure propagation, a shared run ID, step-level audit logging, and automated semantic and unit-test gates.
-
 ### Phase 7: Dev/Test/Prod Deployment
 
-Validate and package an approved release:
-
 ```powershell
-python notebooks/07_run_end_to_end_pipeline.py
 python scripts/validate_release.py --environment dev
 python scripts/check_deployment_gates.py --environment dev --write-evidence
 python scripts/create_release_package.py --version 1.0.0
 ```
 
-The release process uses GitHub Actions or Azure DevOps for CI, versioned evidence, and approvals, while Fabric deployment pipelines promote artifacts across isolated Development, Test, and Production workspaces.
+Generated releases are written to `dist/` and should not be committed.
 
-## Screenshots
+## Implemented Versus Extension Scope
 
-Screenshots will be added after the Fabric Lakehouse, notebooks, semantic model, and Power BI report are built.
+### Implemented
 
-## Interview Talking Points
+- Local multi-source ingestion using committed sample data
+- Raw API JSON preservation
+- Audit metadata and raw hashes
+- Silver data-quality and quarantine framework
+- Gold star-schema generation and validation
+- Semantic-model contract and DAX library
+- End-to-end orchestration and operational logging
+- CI, release gates, packaging, and deployment documentation
+- Fabric PySpark/Delta notebook implementations
 
-See `docs/interview-talking-points.md`.
+### Recommended production extensions
 
-## Lessons Learned
+- Connect to a secured live SQL or Azure SQL source
+- Implement a transactional watermark with Delta `MERGE`
+- Add live API authentication, pagination, and rate-limit handling
+- Add Excel ingestion when required by a real source contract
+- Add a governed user-to-property security bridge and RLS
+- Add Fabric-native alerting and an operational monitoring dashboard
+- Add performance testing for Spark partitioning, file sizing, and Direct Lake behavior
+- Add Type 2 dimensions only where historical attribute reporting is required
 
-See `docs/lessons-learned.md`.
+## Documentation
+
+- Architecture and layer guides: `architecture/` and `docs/`
+- Power BI implementation: `powerbi/semantic-model/build-guide.md`
+- Operations: `docs/operations-runbook-phase-6.md`
+- Dev/Test/Prod promotion: `deployment/dev-test-prod-guide.md`
+- Rollback: `deployment/rollback-runbook-phase-7.md`
+- Interview preparation: `docs/interview-talking-points.md`
+- Lessons learned: `docs/lessons-learned.md`
+
+## Portfolio Talking Point
+
+> I built a production-shaped Microsoft Fabric lakehouse platform for a Commercial Real Estate scenario. It ingests operational, API, and business-file data into a governed medallion architecture; applies configuration-driven quality controls and quarantine; publishes a tested Gold star schema and Direct Lake semantic-model contract; and includes orchestration, observability, automated testing, and Dev/Test/Prod release controls. I also maintained locally executable pandas implementations so the core contracts could be tested in CI independently of Fabric capacity.
+
+## Project Status
+
+All seven repository phases are implemented. The next milestone is provisioning the documented Fabric resources, running the PySpark/Delta notebooks in a Development workspace, creating the Direct Lake semantic model and report, and capturing deployment and portfolio screenshots.

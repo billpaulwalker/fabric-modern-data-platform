@@ -20,6 +20,9 @@ data/gold/
 data/rejected/
 data/operations/
 
+# Local doc references
+docs/fabric-modern-data-platform-study-guide.md
+
 # OS / editor
 .DS_Store
 Thumbs.db
