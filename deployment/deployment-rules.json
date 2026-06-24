@@ -1,0 +1,32 @@
+{
+  "rules": [
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "environment",
+      "dev": "dev",
+      "test": "test",
+      "prod": "prod"
+    },
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "default_lakehouse",
+      "dev": "lh_cre_dev",
+      "test": "lh_cre_test",
+      "prod": "lh_cre_prod"
+    },
+    {
+      "artifact": "CRE Portfolio Analytics",
+      "property": "gold_lakehouse_binding",
+      "dev": "lh_cre_dev",
+      "test": "lh_cre_test",
+      "prod": "lh_cre_prod"
+    },
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "schedule_enabled",
+      "dev": false,
+      "test": false,
+      "prod": true
+    }
+  ]
+}

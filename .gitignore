@@ -5,6 +5,9 @@ __pycache__/
 .venv/
 venv/
 
+#General Releases
+dist/
+
 # Secrets
 .env
 *.key

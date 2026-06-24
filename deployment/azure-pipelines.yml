@@ -1,0 +1,70 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+parameters:
+  - name: releaseVersion
+    type: string
+    default: "1.0.0"
+
+stages:
+  - stage: Validate
+    jobs:
+      - job: EndToEndValidation
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.11"
+          - script: python -m pip install -r requirements.txt
+            displayName: Install dependencies
+          - script: python notebooks/07_run_end_to_end_pipeline.py
+            displayName: Run end-to-end validation
+          - script: python scripts/validate_release.py --environment dev
+            displayName: Validate release structure
+          - script: python scripts/check_deployment_gates.py --environment dev --write-evidence
+            displayName: Evaluate deployment gates
+          - script: python scripts/create_release_package.py --version ${{ parameters.releaseVersion }}
+            displayName: Create release package
+          - publish: dist
+            artifact: fabric-release
+
+  - stage: DevApproval
+    dependsOn: Validate
+    jobs:
+      - deployment: ApproveDevPromotion
+        environment: fabric-dev
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: echo "Promote Development stage through the Fabric deployment pipeline."
+
+  - stage: TestApproval
+    dependsOn: DevApproval
+    jobs:
+      - deployment: ApproveTestPromotion
+        environment: fabric-test
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: echo "Promote Development to Test after validation."
+
+  - stage: ProdApproval
+    dependsOn: TestApproval
+    jobs:
+      - deployment: ApproveProdPromotion
+        environment: fabric-prod
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: echo "Promote Test to Production after approval."

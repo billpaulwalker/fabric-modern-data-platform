@@ -1,0 +1,29 @@
+{
+  "release_name": "fabric-modern-data-platform",
+  "required_paths": [
+    ".github/workflows",
+    "architecture",
+    "config",
+    "deployment",
+    "docs",
+    "notebooks",
+    "pipelines",
+    "powerbi",
+    "sql",
+    "src",
+    "tests",
+    "README.md",
+    "requirements.txt",
+    "pytest.ini"
+  ],
+  "excluded_directories": [
+    ".git",
+    ".pytest_cache",
+    ".venv",
+    "__pycache__",
+    "data",
+    "dist"
+  ],
+  "excluded_suffixes": [".pyc", ".pyo", ".pbix", ".pbit"],
+  "environment_order": ["dev", "test", "prod"]
+}

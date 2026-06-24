@@ -1,0 +1,73 @@
+name: Build and Approve Fabric Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example 1.0.0
+        required: true
+        type: string
+      target_environment:
+        description: Fabric environment to promote into
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run end-to-end validation
+        run: python notebooks/07_run_end_to_end_pipeline.py
+
+      - name: Validate release structure
+        run: python scripts/validate_release.py --environment "${{ inputs.target_environment }}"
+
+      - name: Evaluate deployment gates
+        run: python scripts/check_deployment_gates.py --environment "${{ inputs.target_environment }}" --write-evidence
+
+      - name: Create release package
+        run: python scripts/create_release_package.py --version "${{ inputs.version }}"
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-modern-data-platform-${{ inputs.version }}
+          path: |
+            dist/fabric-modern-data-platform-${{ inputs.version }}.zip
+            dist/deployment-gate-${{ inputs.target_environment }}.json
+          if-no-files-found: error
+
+  approve-promotion:
+    needs: build-release
+    runs-on: ubuntu-latest
+    environment: fabric-${{ inputs.target_environment }}
+
+    steps:
+      - name: Download approved release
+        uses: actions/download-artifact@v4
+        with:
+          name: fabric-modern-data-platform-${{ inputs.version }}
+
+      - name: Record promotion handoff
+        run: |
+          echo "Release ${{ inputs.version }} approved for ${{ inputs.target_environment }}."
+          echo "Promote the matching Fabric deployment-pipeline stage using deployment/deployment-rules.json."

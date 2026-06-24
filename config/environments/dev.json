@@ -1,0 +1,9 @@
+{
+  "environment": "dev",
+  "workspace_name": "ws-cre-modernization-dev",
+  "lakehouse_name": "lh_cre_dev",
+  "semantic_model_name": "CRE Portfolio Analytics - Dev",
+  "deployment_stage": "Development",
+  "schedule_enabled": false,
+  "data_validation_required": true
+}

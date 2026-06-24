@@ -1,0 +1,9 @@
+{
+  "environment": "test",
+  "workspace_name": "ws-cre-modernization-test",
+  "lakehouse_name": "lh_cre_test",
+  "semantic_model_name": "CRE Portfolio Analytics - Test",
+  "deployment_stage": "Test",
+  "schedule_enabled": false,
+  "data_validation_required": true
+}

@@ -1,0 +1,9 @@
+{
+  "environment": "prod",
+  "workspace_name": "ws-cre-modernization-prod",
+  "lakehouse_name": "lh_cre_prod",
+  "semantic_model_name": "CRE Portfolio Analytics",
+  "deployment_stage": "Production",
+  "schedule_enabled": true,
+  "data_validation_required": true
+}

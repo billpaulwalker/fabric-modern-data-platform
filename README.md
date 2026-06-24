@@ -346,9 +346,18 @@ python notebooks/08_pipeline_health_report.py
 
 The pipeline applies ADF/Fabric-style activity dependencies, bounded API retries, failure propagation, a shared run ID, step-level audit logging, and automated semantic and unit-test gates.
 
-### Later Phases
+### Phase 7: Dev/Test/Prod Deployment
 
-Detailed run instructions will be added as the Bronze, Silver, Gold, validation, Power BI, and deployment phases are implemented.
+Validate and package an approved release:
+
+```powershell
+python notebooks/07_run_end_to_end_pipeline.py
+python scripts/validate_release.py --environment dev
+python scripts/check_deployment_gates.py --environment dev --write-evidence
+python scripts/create_release_package.py --version 1.0.0
+```
+
+The release process uses GitHub Actions or Azure DevOps for CI, versioned evidence, and approvals, while Fabric deployment pipelines promote artifacts across isolated Development, Test, and Production workspaces.
 
 ## Screenshots
 
