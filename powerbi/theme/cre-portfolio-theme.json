@@ -1,0 +1,19 @@
+{
+  "name": "CRE Portfolio",
+  "dataColors": ["#1B5E4B", "#2F6B9A", "#D6A84B", "#B84A4A", "#6F7F52", "#665191"],
+  "background": "#FFFFFF",
+  "foreground": "#202428",
+  "tableAccent": "#1B5E4B",
+  "good": "#237A57",
+  "neutral": "#D6A84B",
+  "bad": "#B84A4A",
+  "visualStyles": {
+    "*": {
+      "*": {
+        "title": [{"fontSize": 12, "fontFamily": "Segoe UI Semibold", "color": {"solid": {"color": "#202428"}}}],
+        "background": [{"show": true, "color": {"solid": {"color": "#FFFFFF"}}, "transparency": 0}],
+        "border": [{"show": true, "color": {"solid": {"color": "#D9DEE3"}}}]
+      }
+    }
+  }
+}

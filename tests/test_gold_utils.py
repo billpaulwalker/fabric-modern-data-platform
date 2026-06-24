@@ -89,6 +89,18 @@ def test_open_maintenance_request_without_completed_date_has_null_resolution_day
     assert pd.isna(fact.loc[0, "resolution_days"])
 
 
+def test_maintenance_request_status_alias_is_standardized():
+    properties = build_dim_property(pd.DataFrame([{"property_id": 101}]))
+    requests = pd.DataFrame([{
+        "request_id": 501,
+        "property_id": 101,
+        "request_date": "2026-06-01",
+        "request_status": "Open",
+    }])
+    fact = build_fact_maintenance(requests, properties.frame).frame
+    assert fact.loc[0, "status"] == "Open"
+
+
 def test_budget_fact_derives_year_and_month_from_budget_period():
     properties = build_dim_property(pd.DataFrame([{"property_id": 101}]))
     budget = pd.DataFrame([{
@@ -102,6 +114,34 @@ def test_budget_fact_derives_year_and_month_from_budget_period():
     assert fact.loc[0, "budget_month"] == 2
     assert fact.loc[0, "budget_date_key"] == 20260201
     assert fact.loc[0, "budget_noi"] == 2000
+
+
+def test_budget_expense_is_normalized_to_positive_magnitude():
+    properties = build_dim_property(pd.DataFrame([{"property_id": 101}]))
+    budget = pd.DataFrame([{
+        "property_id": 101,
+        "budget_period": "2026-02-01",
+        "budgeted_revenue": "3000",
+        "budgeted_expense": "-1000",
+    }])
+    fact = build_fact_property_budget(budget, properties.frame).frame
+    assert fact.loc[0, "budget_expense"] == 1000
+    assert fact.loc[0, "budget_noi"] == 2000
+
+
+def test_portfolio_budget_columns_map_to_canonical_measures():
+    properties = build_dim_property(pd.DataFrame([{"property_id": 101}]))
+    budget = pd.DataFrame([{
+        "property_id": 101,
+        "budget_month": "2026-06-01",
+        "budgeted_rent": 34619,
+        "budgeted_maintenance": 12045,
+        "budgeted_operating_expense": 1342,
+    }])
+    fact = build_fact_property_budget(budget, properties.frame).frame
+    assert fact.loc[0, "budget_revenue"] == 34619
+    assert fact.loc[0, "budget_expense"] == 13387
+    assert fact.loc[0, "budget_noi"] == 21232
 
 
 def test_model_validation_rejects_duplicate_grain():

@@ -1,0 +1,107 @@
+-- Paste this script into Power BI DAX Query View, then use "Update model with changes".
+DEFINE
+    MEASURE 'fact_rent_payment'[Total Rent Due] =
+        SUM('fact_rent_payment'[amount_due])
+
+    MEASURE 'fact_rent_payment'[Total Rent Collected] =
+        SUM('fact_rent_payment'[amount_paid])
+
+    MEASURE 'fact_rent_payment'[Outstanding Rent] =
+        SUM('fact_rent_payment'[outstanding_amount])
+
+    MEASURE 'fact_rent_payment'[Collection Rate] =
+        DIVIDE([Total Rent Collected], [Total Rent Due], 0)
+
+    MEASURE 'fact_rent_payment'[Payment Count] =
+        DISTINCTCOUNT('fact_rent_payment'[payment_key])
+
+    MEASURE 'fact_rent_payment'[Rent Collected YTD] =
+        TOTALYTD([Total Rent Collected], 'dim_date'[full_date])
+
+    MEASURE 'fact_rent_payment'[Rent Collected Prior Year] =
+        CALCULATE([Total Rent Collected], SAMEPERIODLASTYEAR('dim_date'[full_date]))
+
+    MEASURE 'fact_rent_payment'[Rent Collected YoY %] =
+        VAR PriorYear = [Rent Collected Prior Year]
+        RETURN DIVIDE([Total Rent Collected] - PriorYear, PriorYear)
+
+    MEASURE 'fact_lease'[Lease Count] =
+        DISTINCTCOUNT('fact_lease'[lease_key])
+
+    MEASURE 'fact_lease'[Active Lease Count] =
+        CALCULATE([Lease Count], KEEPFILTERS('fact_lease'[lease_status] = "Active"))
+
+    MEASURE 'fact_lease'[Monthly Contracted Rent] =
+        SUM('fact_lease'[monthly_rent])
+
+    MEASURE 'fact_lease'[Annualized Contracted Rent] =
+        SUM('fact_lease'[annualized_rent])
+
+    MEASURE 'fact_lease'[Leases Ending] =
+        CALCULATE(
+            [Lease Count],
+            USERELATIONSHIP('dim_date'[date_key], 'fact_lease'[lease_end_date_key])
+        )
+
+    MEASURE 'fact_maintenance_request'[Maintenance Request Count] =
+        DISTINCTCOUNT('fact_maintenance_request'[maintenance_key])
+
+    MEASURE 'fact_maintenance_request'[Open Maintenance Requests] =
+        CALCULATE(
+            [Maintenance Request Count],
+            KEEPFILTERS('fact_maintenance_request'[status] = "Open")
+        )
+
+    MEASURE 'fact_maintenance_request'[Estimated Maintenance Cost] =
+        SUM('fact_maintenance_request'[estimated_cost])
+
+    MEASURE 'fact_maintenance_request'[Actual Maintenance Cost] =
+        SUM('fact_maintenance_request'[actual_cost])
+
+    MEASURE 'fact_maintenance_request'[Maintenance Cost Variance] =
+        [Actual Maintenance Cost] - [Estimated Maintenance Cost]
+
+    MEASURE 'fact_maintenance_request'[Average Resolution Days] =
+        AVERAGE('fact_maintenance_request'[resolution_days])
+
+    MEASURE 'fact_maintenance_request'[Completed Maintenance Requests] =
+        CALCULATE(
+            [Maintenance Request Count],
+            USERELATIONSHIP('dim_date'[date_key], 'fact_maintenance_request'[completed_date_key])
+        )
+
+    MEASURE 'fact_property_budget'[Budget Revenue] =
+        SUM('fact_property_budget'[budget_revenue])
+
+    MEASURE 'fact_property_budget'[Budget Expense] =
+        SUM('fact_property_budget'[budget_expense])
+
+    MEASURE 'fact_property_budget'[Budget NOI] =
+        SUM('fact_property_budget'[budget_noi])
+
+    MEASURE 'fact_property_budget'[Rent to Budget Variance] =
+        [Total Rent Collected] - [Budget Revenue]
+
+    MEASURE 'fact_property_budget'[Rent to Budget Variance %] =
+        DIVIDE([Rent to Budget Variance], [Budget Revenue])
+
+    MEASURE 'dim_property'[Property Count] =
+        CALCULATE(
+            DISTINCTCOUNT('dim_property'[property_key]),
+            'dim_property'[property_key] <> 0
+        )
+
+    MEASURE 'dim_tenant'[Tenant Count] =
+        CALCULATE(
+            DISTINCTCOUNT('dim_tenant'[tenant_key]),
+            'dim_tenant'[tenant_key] <> 0
+        )
+
+EVALUATE
+    ROW(
+        "Total Rent Due", [Total Rent Due],
+        "Total Rent Collected", [Total Rent Collected],
+        "Collection Rate", [Collection Rate],
+        "Lease Count", [Lease Count],
+        "Maintenance Requests", [Maintenance Request Count]
+    )

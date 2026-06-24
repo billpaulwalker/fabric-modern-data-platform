@@ -141,7 +141,10 @@ def transform_to_silver(frame: pd.DataFrame, config: dict[str, Any]) -> SilverRe
 
     valid = silver.loc[~rejected_mask].copy()
     primary_key = [normalize_column_name(value) for value in config.get("primary_key", [])]
-    available_key = _present(valid, primary_key)
+    missing_key = sorted(set(primary_key) - set(valid.columns))
+    if missing_key:
+        raise SilverSchemaError(f"Missing configured primary-key columns: {missing_key}")
+    available_key = primary_key
     duplicate_rows_removed = 0
     if available_key:
         sort_columns = _present(valid, ["ingestion_timestamp", "updated_at", "_source_row_number"])

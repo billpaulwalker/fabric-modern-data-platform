@@ -81,18 +81,21 @@
     {
       "name": "property_budget",
       "input_format": "csv",
-      "primary_key": ["property_id", "budget_year"],
-      "required_columns": ["property_id"],
+      "primary_key": ["property_id", "budget_month"],
+      "required_columns": ["property_id", "budget_month"],
       "column_types": {
         "property_id": "integer",
         "budget_year": "integer",
-        "budget_month": "integer",
+        "budget_month": "string",
+        "budgeted_rent": "decimal",
+        "budgeted_maintenance": "decimal",
+        "budgeted_operating_expense": "decimal",
         "budget_revenue": "decimal",
         "budget_expense": "decimal",
         "budget_amount": "decimal",
         "ingestion_timestamp": "datetime"
       },
-      "non_negative_columns": ["budget_revenue", "budget_expense", "budget_amount"]
+      "non_negative_columns": ["budgeted_rent", "budgeted_maintenance", "budgeted_operating_expense"]
     },
     {
       "name": "property_region_mapping",

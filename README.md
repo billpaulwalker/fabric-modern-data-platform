@@ -324,6 +324,17 @@ The Gold layer contains conformed property, tenant, and date dimensions plus lea
 
 Local outputs are written to `data/gold/`. The Fabric notebook writes managed Delta tables to the `gold` schema for Direct Lake consumption.
 
+### Phase 5: Power BI Semantic Model
+
+Validate the Gold layer against the version-controlled semantic model:
+
+```powershell
+python notebooks/06_validate_semantic_model.py
+python -m pytest
+```
+
+The Power BI assets define a Direct Lake semantic model, conformed relationships, governed DAX measures, formatting, security guidance, and six report pages. Follow `powerbi/semantic-model/build-guide.md` to implement the model in Fabric.
+
 ### Later Phases
 
 Detailed run instructions will be added as the Bronze, Silver, Gold, validation, Power BI, and deployment phases are implemented.

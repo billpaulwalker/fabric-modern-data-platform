@@ -7,7 +7,7 @@ from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
 
-DATE_START = "2024-01-01"
+DATE_START = "2020-01-01"
 DATE_END = "2030-12-31"
 UNKNOWN_KEY = 0
 
@@ -147,6 +147,13 @@ fact_payment = fact_payment.select(*existing(fact_payment, fact_payment_columns)
 
 # Maintenance fact: one row per service request.
 maintenance = silver("maintenance_requests")
+if "status" not in maintenance.columns:
+    maintenance_status = next(
+        (column for column in ["request_status", "maintenance_status"] if column in maintenance.columns),
+        None,
+    )
+    if maintenance_status:
+        maintenance = maintenance.withColumnRenamed(maintenance_status, "status")
 fact_maintenance = lookup_key(maintenance, dim_property, "property_id", "property_key")
 completed_date_key = date_key("completed_date") if "completed_date" in fact_maintenance.columns else F.lit(None).cast("long")
 resolution_days = (
@@ -176,8 +183,10 @@ budget = silver("property_budget")
 budget_aliases = {
     "budget_year": ["year", "fiscal_year"],
     "budget_month": ["month", "fiscal_month"],
-    "budget_revenue": ["budgeted_revenue", "revenue_budget"],
+    "budget_revenue": ["budgeted_rent", "budgeted_revenue", "revenue_budget"],
     "budget_expense": ["budgeted_expense", "budgeted_expenses", "expense_budget"],
+    "budget_maintenance": ["budgeted_maintenance"],
+    "budget_operating_expense": ["budgeted_operating_expense"],
     "budget_amount": ["budgeted_amount"],
 }
 for canonical, candidates in budget_aliases.items():
@@ -225,14 +234,30 @@ fact_budget = (
     fact_budget.withColumn("budget_key", stable_key("property_budget", budget_grain))
     .withColumn("budget_date_key", F.col("budget_year").cast("long") * 10000 + month_expression * 100 + 1)
 )
-for measure in ["budget_revenue", "budget_expense", "budget_amount"]:
+for measure in [
+    "budget_revenue", "budget_expense", "budget_maintenance",
+    "budget_operating_expense", "budget_amount",
+]:
     if measure in fact_budget.columns:
         fact_budget = fact_budget.withColumn(measure, F.coalesce(F.col(measure).cast("decimal(18,2)"), F.lit(0)))
+if "budget_expense" not in fact_budget.columns:
+    expense_components = [
+        column for column in ["budget_maintenance", "budget_operating_expense"]
+        if column in fact_budget.columns
+    ]
+    if expense_components:
+        fact_budget = fact_budget.withColumn(
+            "budget_expense",
+            reduce(lambda left, right: left + right, [F.col(column) for column in expense_components]),
+        )
+if "budget_expense" in fact_budget.columns:
+    fact_budget = fact_budget.withColumn("budget_expense", F.abs(F.col("budget_expense")))
 if "budget_revenue" in fact_budget.columns and "budget_expense" in fact_budget.columns:
     fact_budget = fact_budget.withColumn("budget_noi", F.col("budget_revenue") - F.col("budget_expense"))
 budget_columns = [
     "budget_key", "property_key", "budget_date_key", "budget_year", "budget_month",
-    "budget_revenue", "budget_expense", "budget_noi", "budget_amount",
+    "budget_revenue", "budget_maintenance", "budget_operating_expense",
+    "budget_expense", "budget_noi", "budget_amount",
     "pipeline_run_id", "silver_processed_timestamp",
 ]
 fact_budget = fact_budget.select(*existing(fact_budget, budget_columns))

@@ -57,13 +57,13 @@ TABLES = [
     },
     {
         "name": "property_budget",
-        "primary_key": ["property_id", "budget_year"],
-        "required": ["property_id"],
+        "primary_key": ["property_id", "budget_month"],
+        "required": ["property_id", "budget_month"],
         "types": {
-            "property_id": "long", "budget_year": "long", "budget_month": "long",
-            "budget_revenue": "decimal", "budget_expense": "decimal", "budget_amount": "decimal",
+            "property_id": "long", "budget_month": "string", "budgeted_rent": "decimal",
+            "budgeted_maintenance": "decimal", "budgeted_operating_expense": "decimal",
         },
-        "non_negative": ["budget_revenue", "budget_expense", "budget_amount"],
+        "non_negative": ["budgeted_rent", "budgeted_maintenance", "budgeted_operating_expense"],
     },
     {
         "name": "property_region_mapping",

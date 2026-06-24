@@ -1,0 +1,64 @@
+{
+  "model_name": "CRE Portfolio Analytics",
+  "storage_mode": "Direct Lake",
+  "date_table": "dim_date",
+  "tables": {
+    "dim_property": {
+      "key": "property_key",
+      "required_columns": ["property_key", "property_id", "property_name", "is_current"],
+      "hidden_columns": ["property_key", "property_id", "updated_at"]
+    },
+    "dim_tenant": {
+      "key": "tenant_key",
+      "required_columns": ["tenant_key", "tenant_id", "tenant_name", "is_current"],
+      "hidden_columns": ["tenant_key", "tenant_id", "updated_at"]
+    },
+    "dim_date": {
+      "key": "date_key",
+      "required_columns": ["date_key", "full_date", "calendar_year", "calendar_quarter", "calendar_month", "month_name", "year_month"],
+      "hidden_columns": ["date_key"]
+    },
+    "fact_lease": {
+      "key": "lease_key",
+      "required_columns": ["lease_key", "lease_id", "property_key", "tenant_key", "lease_start_date_key", "lease_end_date_key", "monthly_rent", "annualized_rent", "lease_status"],
+      "hidden_columns": ["lease_key", "lease_id", "property_key", "tenant_key", "lease_start_date_key", "lease_end_date_key", "pipeline_run_id", "silver_processed_timestamp"]
+    },
+    "fact_rent_payment": {
+      "key": "payment_key",
+      "required_columns": ["payment_key", "payment_id", "property_key", "tenant_key", "payment_date_key", "amount_due", "amount_paid", "outstanding_amount"],
+      "hidden_columns": ["payment_key", "payment_id", "lease_id", "property_key", "tenant_key", "payment_date_key", "pipeline_run_id", "silver_processed_timestamp"]
+    },
+    "fact_maintenance_request": {
+      "key": "maintenance_key",
+      "required_columns": ["maintenance_key", "request_id", "property_key", "request_date_key", "completed_date_key", "status", "estimated_cost", "actual_cost", "cost_variance", "resolution_days"],
+      "hidden_columns": ["maintenance_key", "request_id", "property_key", "request_date_key", "completed_date_key", "pipeline_run_id", "silver_processed_timestamp"]
+    },
+    "fact_property_budget": {
+      "key": "budget_key",
+      "required_columns": ["budget_key", "property_key", "budget_date_key", "budget_year", "budget_month", "budget_revenue", "budget_expense", "budget_noi"],
+      "hidden_columns": ["budget_key", "property_key", "budget_date_key", "pipeline_run_id", "silver_processed_timestamp"]
+    }
+  },
+  "relationships": [
+    {"name": "Property to Leases", "from_table": "dim_property", "from_column": "property_key", "to_table": "fact_lease", "to_column": "property_key", "active": true},
+    {"name": "Tenant to Leases", "from_table": "dim_tenant", "from_column": "tenant_key", "to_table": "fact_lease", "to_column": "tenant_key", "active": true},
+    {"name": "Lease Start Date", "from_table": "dim_date", "from_column": "date_key", "to_table": "fact_lease", "to_column": "lease_start_date_key", "active": true},
+    {"name": "Lease End Date", "from_table": "dim_date", "from_column": "date_key", "to_table": "fact_lease", "to_column": "lease_end_date_key", "active": false},
+    {"name": "Property to Payments", "from_table": "dim_property", "from_column": "property_key", "to_table": "fact_rent_payment", "to_column": "property_key", "active": true},
+    {"name": "Tenant to Payments", "from_table": "dim_tenant", "from_column": "tenant_key", "to_table": "fact_rent_payment", "to_column": "tenant_key", "active": true},
+    {"name": "Payment Date", "from_table": "dim_date", "from_column": "date_key", "to_table": "fact_rent_payment", "to_column": "payment_date_key", "active": true},
+    {"name": "Property to Maintenance", "from_table": "dim_property", "from_column": "property_key", "to_table": "fact_maintenance_request", "to_column": "property_key", "active": true},
+    {"name": "Request Date", "from_table": "dim_date", "from_column": "date_key", "to_table": "fact_maintenance_request", "to_column": "request_date_key", "active": true},
+    {"name": "Completion Date", "from_table": "dim_date", "from_column": "date_key", "to_table": "fact_maintenance_request", "to_column": "completed_date_key", "active": false},
+    {"name": "Property to Budget", "from_table": "dim_property", "from_column": "property_key", "to_table": "fact_property_budget", "to_column": "property_key", "active": true},
+    {"name": "Budget Date", "from_table": "dim_date", "from_column": "date_key", "to_table": "fact_property_budget", "to_column": "budget_date_key", "active": true}
+  ],
+  "required_measures": [
+    "Total Rent Due", "Total Rent Collected", "Outstanding Rent", "Collection Rate",
+    "Payment Count", "Lease Count", "Active Lease Count", "Monthly Contracted Rent",
+    "Annualized Contracted Rent", "Maintenance Request Count", "Open Maintenance Requests",
+    "Estimated Maintenance Cost", "Actual Maintenance Cost", "Maintenance Cost Variance",
+    "Average Resolution Days", "Budget Revenue", "Budget Expense", "Budget NOI",
+    "Rent to Budget Variance", "Property Count", "Tenant Count"
+  ]
+}

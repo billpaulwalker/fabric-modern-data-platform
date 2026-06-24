@@ -183,6 +183,13 @@ def build_fact_maintenance(requests: pd.DataFrame, dim_property: pd.DataFrame) -
     frame = requests.copy()
     if "request_id" not in frame.columns:
         raise ValueError("fact_maintenance_request requires request_id")
+    if "status" not in frame.columns:
+        status_source = next(
+            (column for column in ["request_status", "maintenance_status"] if column in frame.columns),
+            None,
+        )
+        if status_source:
+            frame = frame.rename(columns={status_source: "status"})
     frame = _lookup_key(frame, dim_property, "property_id", "property_key")
     frame["request_date_key"] = date_key(frame.get("request_date", pd.Series(index=frame.index, dtype=object)))
     frame["completed_date_key"] = date_key(frame.get("completed_date", pd.Series(index=frame.index, dtype=object)))
@@ -209,8 +216,10 @@ def build_fact_property_budget(budget: pd.DataFrame, dim_property: pd.DataFrame)
     aliases = {
         "budget_year": ["year", "fiscal_year"],
         "budget_month": ["month", "fiscal_month"],
-        "budget_revenue": ["budgeted_revenue", "revenue_budget"],
+        "budget_revenue": ["budgeted_rent", "budgeted_revenue", "revenue_budget"],
         "budget_expense": ["budgeted_expense", "budgeted_expenses", "expense_budget"],
+        "budget_maintenance": ["budgeted_maintenance"],
+        "budget_operating_expense": ["budgeted_operating_expense"],
         "budget_amount": ["budgeted_amount"],
     }
     for canonical, candidates in aliases.items():
@@ -255,16 +264,29 @@ def build_fact_property_budget(budget: pd.DataFrame, dim_property: pd.DataFrame)
     frame["budget_year"] = year
     frame["budget_month"] = month
     frame["budget_date_key"] = (year * 10000 + month * 100 + 1).astype("Int64")
-    for column in ["budget_revenue", "budget_expense", "budget_amount"]:
+    for column in [
+        "budget_revenue", "budget_expense", "budget_maintenance",
+        "budget_operating_expense", "budget_amount",
+    ]:
         if column in frame.columns:
             frame[column] = numeric(frame, column)
+    if "budget_expense" not in frame.columns:
+        expense_components = [
+            column for column in ["budget_maintenance", "budget_operating_expense"]
+            if column in frame.columns
+        ]
+        if expense_components:
+            frame["budget_expense"] = frame[expense_components].sum(axis=1).astype("Float64")
+    if "budget_expense" in frame.columns:
+        frame["budget_expense"] = frame["budget_expense"].abs()
     if "budget_revenue" in frame.columns and "budget_expense" in frame.columns:
         frame["budget_noi"] = frame["budget_revenue"] - frame["budget_expense"]
     source_grain = [column for column in ["property_id", "budget_year", "budget_month"] if column in frame.columns]
     frame = add_surrogate_key(frame, "budget_key", source_grain, "property_budget")
     columns = [
         "budget_key", "property_key", "budget_date_key", "budget_year", "budget_month",
-        "budget_revenue", "budget_expense", "budget_noi", "budget_amount",
+        "budget_revenue", "budget_maintenance", "budget_operating_expense",
+        "budget_expense", "budget_noi", "budget_amount",
         "pipeline_run_id", "silver_processed_timestamp",
     ]
     output = select_existing(frame, columns)

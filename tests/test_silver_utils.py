@@ -68,3 +68,23 @@ def test_latest_duplicate_wins():
 def test_missing_required_source_column_fails_fast():
     with pytest.raises(SilverSchemaError, match="property_id"):
         transform_to_silver(pd.DataFrame([{"lease_id": "10"}]), CONFIG)
+
+
+def test_monthly_budget_grain_preserves_each_period():
+    config = {
+        "name": "property_budget",
+        "primary_key": ["property_id", "budget_month"],
+        "required_columns": ["property_id", "budget_month"],
+        "column_types": {
+            "property_id": "integer",
+            "budget_month": "string",
+            "budgeted_rent": "decimal",
+        },
+    }
+    source = pd.DataFrame([
+        {"property_id": "101", "budget_month": "2026-01-01", "budgeted_rent": "1000"},
+        {"property_id": "101", "budget_month": "2026-02-01", "budgeted_rent": "1100"},
+    ])
+    result = transform_to_silver(source, config)
+    assert result.metrics["rows_valid"] == 2
+    assert result.metrics["duplicate_rows_removed"] == 0
