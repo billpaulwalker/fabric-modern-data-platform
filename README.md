@@ -400,10 +400,6 @@ Generated releases are written to `dist/` and should not be committed.
 - Interview preparation: `docs/interview-talking-points.md`
 - Lessons learned: `docs/lessons-learned.md`
 
-## Portfolio Talking Point
-
-> I built a production-shaped Microsoft Fabric lakehouse platform for a Commercial Real Estate scenario. It ingests operational, API, and business-file data into a governed medallion architecture; applies configuration-driven quality controls and quarantine; publishes a tested Gold star schema and Direct Lake semantic-model contract; and includes orchestration, observability, automated testing, and Dev/Test/Prod release controls. I also maintained locally executable pandas implementations so the core contracts could be tested in CI independently of Fabric capacity.
-
 ## Project Status
 
 All seven repository phases are implemented. The next milestone is provisioning the documented Fabric resources, running the PySpark/Delta notebooks in a Development workspace, creating the Direct Lake semantic model and report, and capturing deployment and portfolio screenshots.
