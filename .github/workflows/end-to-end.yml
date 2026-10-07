@@ -10,6 +10,9 @@ on:
       - "notebooks/**"
       - "src/**"
       - "tests/**"
+      - "scripts/**"
+      - "requirements*.txt"
+      - "pytest.ini"
       - "powerbi/**"
       - ".github/workflows/end-to-end.yml"
 

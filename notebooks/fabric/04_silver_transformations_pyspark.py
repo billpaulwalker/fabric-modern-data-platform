@@ -1,198 +1,240 @@
 # Fabric notebook source
 # Attach the project Lakehouse before running this notebook.
+# Upload config/silver_table_config.json to the Lakehouse at Files/config/ first;
+# it is the same contract the local pandas pipeline uses.
 
 from functools import reduce
+import json
 import re
 
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
-from pyspark.sql.types import DecimalType, LongType, StringType, TimestampType
+from pyspark.sql.types import StringType, StructType
 
 
-TABLES = [
-    {
-        "name": "properties",
-        "primary_key": ["property_id"],
-        "required": ["property_id"],
-        "types": {"property_id": "long", "square_feet": "decimal", "acquired_date": "date"},
-        "non_negative": ["square_feet"],
-    },
-    {
-        "name": "tenants",
-        "primary_key": ["tenant_id"],
-        "required": ["tenant_id"],
-        "types": {"tenant_id": "long", "tenant_start_date": "date"},
-    },
-    {
-        "name": "leases",
-        "primary_key": ["lease_id"],
-        "required": ["lease_id", "property_id", "tenant_id"],
-        "types": {
-            "lease_id": "long", "property_id": "long", "tenant_id": "long",
-            "lease_start_date": "date", "lease_end_date": "date", "monthly_rent": "decimal",
-        },
-        "non_negative": ["monthly_rent"],
-        "date_order": [("lease_start_date", "lease_end_date")],
-    },
-    {
-        "name": "rent_payments",
-        "primary_key": ["payment_id"],
-        "required": ["payment_id", "lease_id"],
-        "types": {
-            "payment_id": "long", "lease_id": "long", "payment_date": "date",
-            "amount_due": "decimal", "amount_paid": "decimal",
-        },
-        "non_negative": ["amount_due", "amount_paid"],
-    },
-    {
-        "name": "maintenance_requests",
-        "primary_key": ["request_id"],
-        "required": ["request_id", "property_id"],
-        "types": {
-            "request_id": "long", "property_id": "long", "request_date": "date",
-            "completed_date": "date", "estimated_cost": "decimal", "actual_cost": "decimal",
-        },
-        "non_negative": ["estimated_cost", "actual_cost"],
-        "date_order": [("request_date", "completed_date")],
-    },
-    {
-        "name": "property_budget",
-        "primary_key": ["property_id", "budget_month"],
-        "required": ["property_id", "budget_month"],
-        "types": {
-            "property_id": "long", "budget_month": "string", "budgeted_rent": "decimal",
-            "budgeted_maintenance": "decimal", "budgeted_operating_expense": "decimal",
-        },
-        "non_negative": ["budgeted_rent", "budgeted_maintenance", "budgeted_operating_expense"],
-    },
-    {
-        "name": "property_region_mapping",
-        "primary_key": ["property_id"],
-        "required": ["property_id"],
-        "types": {"property_id": "long"},
-    },
-    {
-        "name": "weather_api_raw",
-        "primary_key": ["property_id", "observation_timestamp"],
-        "required": ["property_id", "observation_timestamp"],
-        "types": {
-            "property_id": "long", "observation_timestamp": "timestamp",
-            "main_temp": "decimal", "main_feels_like": "decimal",
-            "main_humidity": "decimal", "wind_speed": "decimal",
-        },
-        "non_negative": ["main_humidity", "wind_speed"],
-    },
-]
+CONFIG_DIRECTORY = "/lakehouse/default/Files/config"
+
+SPARK_TYPES = {
+    "string": "string",
+    "integer": "long",
+    "decimal": "decimal(18,2)",
+    "date": "date",
+    "datetime": "timestamp",
+    "boolean": "boolean",
+}
+
+
+def load_config(path) -> dict:
+    with open(path, "r", encoding="utf-8") as file:
+        return json.load(file)
 
 
 def snake_case(name: str) -> str:
-    value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(name))
     return re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]+", "_", value)).strip("_").lower()
 
 
-def spark_type(type_name: str):
-    return {
-        "string": StringType(),
-        "long": LongType(),
-        "decimal": DecimalType(18, 2),
-        "date": "date",
-        "timestamp": TimestampType(),
-    }[type_name]
+def spark_type(type_name: str) -> str:
+    if type_name not in SPARK_TYPES:
+        raise ValueError(f"Unsupported Silver data type: {type_name}")
+    return SPARK_TYPES[type_name]
 
 
-def add_reason(frame: DataFrame, condition, reason: str) -> DataFrame:
-    return frame.withColumn(
-        "_rejection_reasons",
-        F.when(condition, F.array_union("_rejection_reasons", F.array(F.lit(reason))))
-        .otherwise(F.col("_rejection_reasons")),
-    )
+def flatten_structs(frame: DataFrame) -> DataFrame:
+    """Expand nested API structs to parent_child columns, matching pandas json_normalize."""
+    while any(isinstance(field.dataType, StructType) for field in frame.schema.fields):
+        columns = []
+        for field in frame.schema.fields:
+            if isinstance(field.dataType, StructType):
+                columns.extend(
+                    F.col(f"`{field.name}`.`{child.name}`").alias(f"{field.name}_{child.name}")
+                    for child in field.dataType.fields
+                )
+            else:
+                columns.append(F.col(f"`{field.name}`"))
+        frame = frame.select(*columns)
+    return frame
 
 
-def transform_table(config: dict) -> tuple[DataFrame, DataFrame, dict]:
+def normalize_columns(frame: DataFrame) -> DataFrame:
+    names = [snake_case(column) for column in frame.columns]
+    if len(names) != len(set(names)):
+        raise ValueError("Column normalization produced duplicate column names")
+    return frame.select([F.col(f"`{column}`").alias(name) for column, name in zip(frame.columns, names)])
+
+
+def blank_strings_to_null(frame: DataFrame) -> DataFrame:
+    for field in frame.schema.fields:
+        if isinstance(field.dataType, StringType):
+            frame = frame.withColumn(
+                field.name, F.when(F.trim(F.col(field.name)) == "", F.lit(None)).otherwise(F.col(field.name))
+            )
+    return frame
+
+
+def apply_column_mappings(frame: DataFrame, mappings: dict) -> DataFrame:
+    for source, target in mappings.items():
+        source, target = snake_case(source), snake_case(target)
+        if source not in frame.columns:
+            continue
+        if target in frame.columns:
+            raise ValueError(f"Column mapping {source} -> {target} collides with an existing column")
+        frame = frame.withColumnRenamed(source, target)
+    return frame
+
+
+def apply_derived_columns(frame: DataFrame, derivations: dict) -> DataFrame:
+    """Calculate configured columns from typed inputs. Supported operation: product."""
+    for target, rule in derivations.items():
+        target = snake_case(target)
+        if set(rule) != {"product"}:
+            raise ValueError(f"Unsupported derivation for {target}: {sorted(rule)}")
+        inputs = [snake_case(column) for column in rule["product"]]
+        missing = [column for column in inputs if column not in frame.columns]
+        if missing:
+            raise ValueError(f"Cannot derive {target}; missing input columns: {missing}")
+        product = reduce(lambda left, right: left * right, [F.col(column).cast("decimal(18,6)") for column in inputs])
+        frame = frame.withColumn(target, product.cast("decimal(18,2)"))
+    return frame
+
+
+def configured_columns(config: dict) -> set:
+    columns = set(config.get("column_types", {})) | set(config.get("allowed_values", {}))
+    columns |= set(config.get("non_negative_columns", []))
+    columns |= {column for rule in config.get("date_order_rules", []) for column in rule}
+    return {snake_case(column) for column in columns}
+
+
+class RejectionChecks:
+    """Record each rule as its own flag column, then build the reasons array once.
+
+    Re-wrapping a single reasons column per rule doubles the plan at every step and
+    exhausts driver memory during optimization once a table has a dozen rules.
+    """
+
+    def __init__(self):
+        self.reasons = []
+
+    def add(self, frame: DataFrame, condition, reason: str) -> DataFrame:
+        flag = f"_check_{len(self.reasons)}"
+        self.reasons.append((flag, reason))
+        return frame.withColumn(flag, F.coalesce(condition, F.lit(False)))
+
+    def finish(self, frame: DataFrame) -> DataFrame:
+        if not self.reasons:
+            return frame.withColumn("_rejection_reasons", F.array().cast("array<string>"))
+        reasons = F.array_compact(F.array(*[F.when(F.col(flag), F.lit(reason)) for flag, reason in self.reasons]))
+        return frame.withColumn("_rejection_reasons", reasons).drop(*[flag for flag, _ in self.reasons])
+
+
+def transform_table(frame: DataFrame, config: dict) -> tuple:
+    """Standardize, validate, quarantine, and deduplicate one Bronze table."""
     name = config["name"]
-    frame = spark.table(f"bronze.{name}")
-    frame = frame.select([F.col(column).alias(snake_case(column)) for column in frame.columns])
+    frame = normalize_columns(flatten_structs(frame))
+    frame = apply_column_mappings(frame, config.get("column_mappings", {}))
+    frame = blank_strings_to_null(frame).withColumn("_source_row_number", F.monotonically_increasing_id())
 
-    missing = sorted(set(config.get("required", [])) - set(frame.columns))
-    if missing:
-        raise ValueError(f"bronze.{name} is missing required columns: {missing}")
+    required = [snake_case(column) for column in config.get("required_columns", [])]
+    missing_required = sorted(set(required) - set(frame.columns))
+    if missing_required:
+        raise ValueError(f"{name} is missing required source columns: {missing_required}")
 
-    frame = frame.withColumn("_rejection_reasons", F.array().cast("array<string>"))
-    for column, type_name in config.get("types", {}).items():
+    checks = RejectionChecks()
+    for column, type_name in config.get("column_types", {}).items():
+        column = snake_case(column)
         if column not in frame.columns:
             continue
         original = F.col(column)
-        converted = original.cast(spark_type(type_name))
-        frame = add_reason(
-            frame,
-            original.isNotNull() & converted.isNull(),
-            f"invalid_{type_name}:{column}",
+        converted = F.trim(original) if type_name == "string" else original.cast(spark_type(type_name))
+        frame = checks.add(
+            frame, original.isNotNull() & converted.isNull(), f"invalid_{type_name}:{column}"
         ).withColumn(column, converted)
 
-    for column in config.get("required", []):
-        frame = add_reason(frame, F.col(column).isNull(), f"required:{column}")
-    for column in config.get("non_negative", []):
-        if column in frame.columns:
-            frame = add_reason(frame, F.col(column) < 0, f"negative_value:{column}")
-    for start, end in config.get("date_order", []):
-        if start in frame.columns and end in frame.columns:
-            frame = add_reason(
-                frame,
-                F.col(start).isNotNull() & F.col(end).isNotNull() & (F.col(end) < F.col(start)),
-                f"date_order:{start}>{end}",
-            )
+    frame = apply_derived_columns(frame, config.get("derived_columns", {}))
+    missing_configured = sorted(configured_columns(config) - set(frame.columns))
 
+    for column in required:
+        frame = checks.add(frame, F.col(column).isNull(), f"required:{column}")
+    for column, allowed in config.get("allowed_values", {}).items():
+        column = snake_case(column)
+        if column in frame.columns:
+            invalid = F.col(column).isNotNull() & ~F.col(column).isin(allowed)
+            frame = checks.add(frame, invalid, f"invalid_value:{column}")
+    for column in [snake_case(column) for column in config.get("non_negative_columns", [])]:
+        if column in frame.columns:
+            frame = checks.add(frame, F.col(column).cast("double") < 0, f"negative_value:{column}")
+    for start, end in config.get("date_order_rules", []):
+        start, end = snake_case(start), snake_case(end)
+        if start in frame.columns and end in frame.columns:
+            invalid = F.col(start).isNotNull() & F.col(end).isNotNull() & (F.col(end) < F.col(start))
+            frame = checks.add(frame, invalid, f"date_order:{start}>{end}")
+
+    frame = checks.finish(frame)
     rejected = (
         frame.filter(F.size("_rejection_reasons") > 0)
         .withColumn("data_quality_status", F.lit("REJECTED"))
         .withColumn("rejection_reason", F.concat_ws(" | ", "_rejection_reasons"))
         .withColumn("silver_processed_timestamp", F.current_timestamp())
         .withColumn("rejected_source_object", F.lit(name))
-        .drop("_rejection_reasons")
+        .drop("_rejection_reasons", "_source_row_number")
     )
     valid = frame.filter(F.size("_rejection_reasons") == 0).drop("_rejection_reasons")
 
-    order_columns = []
-    if "ingestion_timestamp" in valid.columns:
-        order_columns.append(F.col("ingestion_timestamp").desc_nulls_last())
-    if "updated_at" in valid.columns:
-        order_columns.append(F.col("updated_at").desc_nulls_last())
-    order_columns.append(F.monotonically_increasing_id().desc())
-    window = Window.partitionBy(*config["primary_key"]).orderBy(*order_columns)
+    primary_key = [snake_case(column) for column in config.get("primary_key", [])]
+    missing_key = sorted(set(primary_key) - set(valid.columns))
+    if missing_key:
+        raise ValueError(f"{name} is missing configured primary-key columns: {missing_key}")
+    valid_before_dedup = valid.count()
+    if primary_key:
+        order_columns = [
+            F.col(column).desc_nulls_last()
+            for column in ["ingestion_timestamp", "updated_at", "_source_row_number"]
+            if column in valid.columns
+        ]
+        window = Window.partitionBy(*primary_key).orderBy(*order_columns)
+        valid = valid.withColumn("_row_number", F.row_number().over(window)).filter(F.col("_row_number") == 1)
     valid = (
-        valid.withColumn("_row_number", F.row_number().over(window))
-        .filter(F.col("_row_number") == 1)
-        .drop("_row_number")
+        valid.drop("_row_number", "_source_row_number")
         .withColumn("data_quality_status", F.lit("VALID"))
         .withColumn("silver_processed_timestamp", F.current_timestamp())
     )
 
+    rows_valid = valid.count()
     metrics = {
         "table": name,
         "rows_read": frame.count(),
-        "rows_valid": valid.count(),
+        "rows_valid": rows_valid,
         "rows_rejected": rejected.count(),
+        "duplicate_rows_removed": valid_before_dedup - rows_valid,
+        "missing_configured_columns": missing_configured,
     }
     return valid, rejected, metrics
 
 
-spark.sql("CREATE SCHEMA IF NOT EXISTS silver")
-spark.sql("CREATE SCHEMA IF NOT EXISTS silver_quarantine")
+def main(spark, config_directory: str = CONFIG_DIRECTORY) -> list:
+    configs = load_config(f"{config_directory}/silver_table_config.json")["tables"]
+    results = [transform_table(spark.table(f"bronze.{config['name']}"), config) for config in configs]
 
-all_rejected = []
-run_metrics = []
-for table_config in TABLES:
-    silver_frame, rejected_frame, table_metrics = transform_table(table_config)
-    silver_frame.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(
-        f"silver.{table_config['name']}"
+    # Fail before writing anything if the source no longer matches the contract.
+    gaps = {metrics["table"]: metrics["missing_configured_columns"] for _, _, metrics in results
+            if metrics["missing_configured_columns"]}
+    if gaps:
+        raise ValueError(f"Configured columns are absent from Bronze; update column_mappings: {gaps}")
+
+    spark.sql("CREATE SCHEMA IF NOT EXISTS silver")
+    spark.sql("CREATE SCHEMA IF NOT EXISTS silver_quarantine")
+    for valid, _, metrics in results:
+        valid.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(
+            f"silver.{metrics['table']}"
+        )
+    rejected_union = reduce(
+        lambda left, right: left.unionByName(right, allowMissingColumns=True), [rejected for _, rejected, _ in results]
     )
-    all_rejected.append(rejected_frame)
-    run_metrics.append(table_metrics)
-
-if all_rejected:
-    rejected_union = reduce(lambda left, right: left.unionByName(right, allowMissingColumns=True), all_rejected)
     rejected_union.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(
         "silver_quarantine.rejected_records"
     )
+    return [metrics for _, _, metrics in results]
 
-display(spark.createDataFrame(run_metrics))
+
+if __name__ == "__main__":
+    display(spark.createDataFrame(main(spark)))  # noqa: F821 - spark and display are Fabric notebook globals

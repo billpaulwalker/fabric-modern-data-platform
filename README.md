@@ -278,6 +278,8 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
+To also run the Fabric PySpark notebook tests locally, install Java 17 and `python -m pip install -r requirements-dev.txt`. Without PySpark those tests are skipped.
+
 ### 2. Run the complete local platform
 
 ```powershell

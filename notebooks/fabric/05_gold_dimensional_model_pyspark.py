@@ -1,32 +1,52 @@
 # Fabric notebook source
 # Attach the schema-enabled project Lakehouse before running all cells.
+# Upload config/gold_model_config.json to the Lakehouse at Files/config/ first.
 
 from functools import reduce
+import json
 
-from pyspark.sql import DataFrame, Window
+from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 
-DATE_START = "2020-01-01"
-DATE_END = "2030-12-31"
+CONFIG_DIRECTORY = "/lakehouse/default/Files/config"
 UNKNOWN_KEY = 0
+GRAINS = {
+    "dim_property": ["property_id"],
+    "dim_tenant": ["tenant_id"],
+    "dim_date": ["date_key"],
+    "fact_lease": ["lease_id"],
+    "fact_rent_payment": ["payment_id"],
+    "fact_maintenance_request": ["request_id"],
+    "fact_property_budget": ["property_key", "budget_year", "budget_month"],
+}
 
 
-def silver(name: str) -> DataFrame:
-    return spark.table(f"silver.{name}")
+def load_config(path) -> dict:
+    with open(path, "r", encoding="utf-8") as file:
+        return json.load(file)
 
 
-def existing(frame: DataFrame, columns: list[str]) -> list[str]:
+def existing(frame: DataFrame, columns: list) -> list:
     return [column for column in columns if column in frame.columns]
 
 
-def stable_key(namespace: str, columns: list[str]):
+def stable_key(namespace: str, columns: list):
     values = [F.lit(namespace), *[F.coalesce(F.col(column).cast("string"), F.lit("<NULL>")) for column in columns]]
     return F.pmod(F.xxhash64(*values), F.lit(9223372036854775807)).cast("long")
 
 
-def date_key(column: str):
+def date_key(frame: DataFrame, column: str):
+    if column not in frame.columns:
+        return F.lit(None).cast("long")
     return F.date_format(F.to_date(F.col(column)), "yyyyMMdd").cast("long")
+
+
+def measure(frame: DataFrame, column: str):
+    """Missing values read as zero; a column absent from the source stays null rather than reading as zero."""
+    if column not in frame.columns:
+        return F.lit(None).cast("decimal(18,2)")
+    return F.coalesce(F.col(column).cast("decimal(18,2)"), F.lit(0).cast("decimal(18,2)"))
 
 
 def add_unknown_member(frame: DataFrame, key_column: str, business_key: str, label_column: str) -> DataFrame:
@@ -43,7 +63,7 @@ def add_unknown_member(frame: DataFrame, key_column: str, business_key: str, lab
         else:
             value = F.lit(None)
         expressions.append(value.cast(field.dataType).alias(field.name))
-    unknown = spark.range(1).select(*expressions)
+    unknown = frame.sparkSession.range(1).select(*expressions)
     return unknown.unionByName(frame)
 
 
@@ -54,223 +74,250 @@ def lookup_key(fact: DataFrame, dimension: DataFrame, natural_key: str, surrogat
     return fact.join(lookup, natural_key, "left").fillna({surrogate_key: UNKNOWN_KEY})
 
 
-def write_gold(name: str, frame: DataFrame) -> dict:
-    frame.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"gold.{name}")
-    return {"model": name, "rows_written": frame.count()}
+def assert_unique_grain(name: str, frame: DataFrame, grain: list) -> None:
+    duplicates = frame.groupBy(*grain).count().filter(F.col("count") > 1).count()
+    if duplicates:
+        raise ValueError(f"{name} violates its declared grain {grain}: {duplicates} duplicate keys")
 
 
 # Conformed dimensions: current-state (Type 1) for this portfolio phase.
-property_columns = [
-    "property_id", "property_name", "property_type", "city", "state", "postal_code",
-    "square_feet", "property_status", "acquired_date", "updated_at",
-]
-dim_property = silver("properties").select(*existing(silver("properties"), property_columns))
-regions = silver("property_region_mapping")
-region_columns = existing(regions, ["property_id", "region", "market"])
-if "property_id" in region_columns:
-    dim_property = dim_property.join(regions.select(*region_columns).dropDuplicates(["property_id"]), "property_id", "left")
-dim_property = (
-    dim_property.dropDuplicates(["property_id"])
-    .withColumn("property_key", stable_key("property", ["property_id"]))
-    .withColumn("is_current", F.lit(True))
-)
-dim_property = add_unknown_member(dim_property, "property_key", "property_id", "property_name")
+def build_dim_property(properties: DataFrame, regions) -> DataFrame:
+    columns = [
+        "property_id", "property_name", "property_type", "city", "state", "postal_code",
+        "square_feet", "property_status", "acquired_date", "updated_at",
+    ]
+    frame = properties.select(*existing(properties, columns))
+    if regions is not None and "property_id" in regions.columns:
+        region_columns = existing(regions, ["property_id", "region", "market"])
+        frame = frame.join(regions.select(*region_columns).dropDuplicates(["property_id"]), "property_id", "left")
+    frame = (
+        frame.dropDuplicates(["property_id"])
+        .withColumn("property_key", stable_key("property", ["property_id"]))
+        .withColumn("is_current", F.lit(True))
+    )
+    return add_unknown_member(frame, "property_key", "property_id", "property_name")
 
-tenant_columns = ["tenant_id", "tenant_name", "industry", "tenant_status", "tenant_start_date", "updated_at"]
-tenant_source = silver("tenants")
-dim_tenant = (
-    tenant_source.select(*existing(tenant_source, tenant_columns))
-    .dropDuplicates(["tenant_id"])
-    .withColumn("tenant_key", stable_key("tenant", ["tenant_id"]))
-    .withColumn("is_current", F.lit(True))
-)
-dim_tenant = add_unknown_member(dim_tenant, "tenant_key", "tenant_id", "tenant_name")
 
-dim_date = (
-    spark.sql(f"SELECT explode(sequence(to_date('{DATE_START}'), to_date('{DATE_END}'), interval 1 day)) AS full_date")
-    .withColumn("date_key", F.date_format("full_date", "yyyyMMdd").cast("long"))
-    .withColumn("calendar_year", F.year("full_date"))
-    .withColumn("calendar_quarter", F.quarter("full_date"))
-    .withColumn("calendar_month", F.month("full_date"))
-    .withColumn("month_name", F.date_format("full_date", "MMMM"))
-    .withColumn("year_month", F.date_format("full_date", "yyyy-MM"))
-    .withColumn("day_of_month", F.dayofmonth("full_date"))
-    .withColumn("day_name", F.date_format("full_date", "EEEE"))
-    .withColumn("iso_week", F.weekofyear("full_date"))
-    .withColumn("is_weekend", F.dayofweek("full_date").isin(1, 7))
-)
+def build_dim_tenant(tenants: DataFrame) -> DataFrame:
+    columns = ["tenant_id", "tenant_name", "industry", "tenant_status", "tenant_start_date", "updated_at"]
+    frame = (
+        tenants.select(*existing(tenants, columns))
+        .dropDuplicates(["tenant_id"])
+        .withColumn("tenant_key", stable_key("tenant", ["tenant_id"]))
+        .withColumn("is_current", F.lit(True))
+    )
+    return add_unknown_member(frame, "tenant_key", "tenant_id", "tenant_name")
+
+
+def build_dim_date(spark, start_date: str, end_date: str) -> DataFrame:
+    return (
+        spark.sql(
+            f"SELECT explode(sequence(to_date('{start_date}'), to_date('{end_date}'), interval 1 day)) AS full_date"
+        )
+        .withColumn("date_key", F.date_format("full_date", "yyyyMMdd").cast("long"))
+        .withColumn("calendar_year", F.year("full_date"))
+        .withColumn("calendar_quarter", F.quarter("full_date"))
+        .withColumn("calendar_month", F.month("full_date"))
+        .withColumn("month_name", F.date_format("full_date", "MMMM"))
+        .withColumn("year_month", F.date_format("full_date", "yyyy-MM"))
+        .withColumn("day_of_month", F.dayofmonth("full_date"))
+        .withColumn("day_name", F.date_format("full_date", "EEEE"))
+        .withColumn("iso_week", F.weekofyear("full_date"))
+        .withColumn("is_weekend", F.dayofweek("full_date").isin(1, 7))
+    )
 
 
 # Lease fact: one row per lease.
-leases = silver("leases")
-fact_lease = lookup_key(leases, dim_property, "property_id", "property_key")
-fact_lease = lookup_key(fact_lease, dim_tenant, "tenant_id", "tenant_key")
-fact_lease = (
-    fact_lease.withColumn("lease_key", stable_key("lease", ["lease_id"]))
-    .withColumn("lease_start_date_key", date_key("lease_start_date"))
-    .withColumn("lease_end_date_key", date_key("lease_end_date"))
-    .withColumn("monthly_rent", F.coalesce(F.col("monthly_rent").cast("decimal(18,2)"), F.lit(0)))
-    .withColumn("annualized_rent", F.col("monthly_rent") * F.lit(12))
-)
-fact_lease_columns = [
-    "lease_key", "lease_id", "property_key", "tenant_key", "lease_start_date_key",
-    "lease_end_date_key", "monthly_rent", "annualized_rent", "lease_status",
-    "pipeline_run_id", "silver_processed_timestamp",
-]
-fact_lease = fact_lease.select(*existing(fact_lease, fact_lease_columns))
-
-
-# Rent-payment fact: lease lookup supplies conformed property and tenant keys.
-payments = silver("rent_payments")
-lease_bridge_columns = existing(leases, ["lease_id", "property_id", "tenant_id"])
-fact_payment = payments.join(leases.select(*lease_bridge_columns).dropDuplicates(["lease_id"]), "lease_id", "left")
-fact_payment = lookup_key(fact_payment, dim_property, "property_id", "property_key")
-fact_payment = lookup_key(fact_payment, dim_tenant, "tenant_id", "tenant_key")
-fact_payment = (
-    fact_payment.withColumn("payment_key", stable_key("rent_payment", ["payment_id"]))
-    .withColumn("payment_date_key", date_key("payment_date"))
-    .withColumn("amount_due", F.coalesce(F.col("amount_due").cast("decimal(18,2)"), F.lit(0)))
-    .withColumn("amount_paid", F.coalesce(F.col("amount_paid").cast("decimal(18,2)"), F.lit(0)))
-    .withColumn("outstanding_amount", F.greatest(F.col("amount_due") - F.col("amount_paid"), F.lit(0)))
-    .withColumn(
-        "collection_rate",
-        F.when(F.col("amount_due") == 0, F.lit(0.0)).otherwise(F.col("amount_paid") / F.col("amount_due")),
+def build_fact_lease(leases: DataFrame, dim_property: DataFrame, dim_tenant: DataFrame) -> DataFrame:
+    frame = lookup_key(leases, dim_property, "property_id", "property_key")
+    frame = lookup_key(frame, dim_tenant, "tenant_id", "tenant_key")
+    frame = (
+        frame.withColumn("lease_key", stable_key("lease", ["lease_id"]))
+        .withColumn("lease_start_date_key", date_key(frame, "lease_start_date"))
+        .withColumn("lease_end_date_key", date_key(frame, "lease_end_date"))
+        .withColumn("monthly_rent", measure(frame, "monthly_rent"))
+        .withColumn("annualized_rent", F.col("monthly_rent") * F.lit(12))
     )
-)
-fact_payment_columns = [
-    "payment_key", "payment_id", "lease_id", "property_key", "tenant_key", "payment_date_key",
-    "amount_due", "amount_paid", "outstanding_amount", "collection_rate", "payment_status",
-    "pipeline_run_id", "silver_processed_timestamp",
-]
-fact_payment = fact_payment.select(*existing(fact_payment, fact_payment_columns))
+    columns = [
+        "lease_key", "lease_id", "property_key", "tenant_key", "lease_start_date_key",
+        "lease_end_date_key", "monthly_rent", "annualized_rent", "lease_status",
+        "pipeline_run_id", "silver_processed_timestamp",
+    ]
+    return frame.select(*existing(frame, columns))
+
+
+# Rent-payment fact: payment-level IDs win; the lease fills them only where the payment has none.
+def build_fact_rent_payment(
+    payments: DataFrame, leases: DataFrame, dim_property: DataFrame, dim_tenant: DataFrame
+) -> DataFrame:
+    frame = payments
+    lease_columns = existing(leases, ["lease_id", "property_id", "tenant_id"])
+    if "lease_id" in frame.columns and "lease_id" in lease_columns:
+        bridge = leases.select(
+            "lease_id", *[F.col(column).alias(f"{column}_lease") for column in lease_columns[1:]]
+        ).dropDuplicates(["lease_id"])
+        frame = frame.join(bridge, "lease_id", "left")
+        for column in lease_columns[1:]:
+            lease_value = F.col(f"{column}_lease")
+            value = F.coalesce(F.col(column), lease_value) if column in payments.columns else lease_value
+            frame = frame.withColumn(column, value).drop(f"{column}_lease")
+    frame = lookup_key(frame, dim_property, "property_id", "property_key")
+    frame = lookup_key(frame, dim_tenant, "tenant_id", "tenant_key")
+    frame = (
+        frame.withColumn("payment_key", stable_key("rent_payment", ["payment_id"]))
+        .withColumn("payment_date_key", date_key(frame, "payment_date"))
+        .withColumn("amount_due", measure(frame, "amount_due"))
+        .withColumn("amount_paid", measure(frame, "amount_paid"))
+        .withColumn("outstanding_amount", F.greatest(F.col("amount_due") - F.col("amount_paid"), F.lit(0)))
+        .withColumn(
+            "collection_rate",
+            F.when(F.col("amount_due") == 0, F.lit(0.0)).otherwise(F.col("amount_paid") / F.col("amount_due")),
+        )
+    )
+    columns = [
+        "payment_key", "payment_id", "lease_id", "property_key", "tenant_key", "payment_date_key",
+        "amount_due", "amount_paid", "outstanding_amount", "collection_rate", "payment_status",
+        "pipeline_run_id", "silver_processed_timestamp",
+    ]
+    return frame.select(*existing(frame, columns))
 
 
 # Maintenance fact: one row per service request.
-maintenance = silver("maintenance_requests")
-if "status" not in maintenance.columns:
-    maintenance_status = next(
-        (column for column in ["request_status", "maintenance_status"] if column in maintenance.columns),
-        None,
+def build_fact_maintenance(maintenance: DataFrame, dim_property: DataFrame) -> DataFrame:
+    frame = maintenance
+    if "status" not in frame.columns:
+        status_source = next(
+            (column for column in ["request_status", "maintenance_status"] if column in frame.columns), None
+        )
+        if status_source:
+            frame = frame.withColumnRenamed(status_source, "status")
+    frame = lookup_key(frame, dim_property, "property_id", "property_key")
+    resolution_days = (
+        F.datediff(F.to_date("completed_date"), F.to_date("request_date"))
+        if "completed_date" in frame.columns and "request_date" in frame.columns
+        else F.lit(None).cast("int")
     )
-    if maintenance_status:
-        maintenance = maintenance.withColumnRenamed(maintenance_status, "status")
-fact_maintenance = lookup_key(maintenance, dim_property, "property_id", "property_key")
-completed_date_key = date_key("completed_date") if "completed_date" in fact_maintenance.columns else F.lit(None).cast("long")
-resolution_days = (
-    F.datediff("completed_date", "request_date")
-    if "completed_date" in fact_maintenance.columns and "request_date" in fact_maintenance.columns
-    else F.lit(None).cast("int")
-)
-fact_maintenance = (
-    fact_maintenance.withColumn("maintenance_key", stable_key("maintenance", ["request_id"]))
-    .withColumn("request_date_key", date_key("request_date"))
-    .withColumn("completed_date_key", completed_date_key)
-    .withColumn("estimated_cost", F.coalesce(F.col("estimated_cost").cast("decimal(18,2)"), F.lit(0)))
-    .withColumn("actual_cost", F.coalesce(F.col("actual_cost").cast("decimal(18,2)"), F.lit(0)))
-    .withColumn("cost_variance", F.col("actual_cost") - F.col("estimated_cost"))
-    .withColumn("resolution_days", resolution_days)
-)
-maintenance_columns = [
-    "maintenance_key", "request_id", "property_key", "request_date_key", "completed_date_key",
-    "category", "priority", "status", "estimated_cost", "actual_cost", "cost_variance",
-    "resolution_days", "pipeline_run_id", "silver_processed_timestamp",
-]
-fact_maintenance = fact_maintenance.select(*existing(fact_maintenance, maintenance_columns))
+    frame = (
+        frame.withColumn("maintenance_key", stable_key("maintenance", ["request_id"]))
+        .withColumn("request_date_key", date_key(frame, "request_date"))
+        .withColumn("completed_date_key", date_key(frame, "completed_date"))
+        .withColumn("estimated_cost", measure(frame, "estimated_cost"))
+        .withColumn("actual_cost", measure(frame, "actual_cost"))
+        .withColumn("cost_variance", F.col("actual_cost") - F.col("estimated_cost"))
+        .withColumn("resolution_days", resolution_days)
+    )
+    columns = [
+        "maintenance_key", "request_id", "property_key", "request_date_key", "completed_date_key",
+        "category", "priority", "status", "estimated_cost", "actual_cost", "cost_variance",
+        "resolution_days", "pipeline_run_id", "silver_processed_timestamp",
+    ]
+    return frame.select(*existing(frame, columns))
 
 
 # Property-budget fact: one row per property and monthly budget period.
-budget = silver("property_budget")
-budget_aliases = {
-    "budget_year": ["year", "fiscal_year"],
-    "budget_month": ["month", "fiscal_month"],
-    "budget_revenue": ["budgeted_rent", "budgeted_revenue", "revenue_budget"],
-    "budget_expense": ["budgeted_expense", "budgeted_expenses", "expense_budget"],
-    "budget_maintenance": ["budgeted_maintenance"],
-    "budget_operating_expense": ["budgeted_operating_expense"],
-    "budget_amount": ["budgeted_amount"],
-}
-for canonical, candidates in budget_aliases.items():
-    if canonical not in budget.columns:
-        source = next((column for column in candidates if column in budget.columns), None)
-        if source:
-            budget = budget.withColumnRenamed(source, canonical)
+def build_fact_property_budget(budget: DataFrame, dim_property: DataFrame) -> DataFrame:
+    aliases = {
+        "budget_year": ["year", "fiscal_year"],
+        "budget_month": ["month", "fiscal_month"],
+        "budget_revenue": ["budgeted_rent", "budgeted_revenue", "revenue_budget"],
+        "budget_expense": ["budgeted_expense", "budgeted_expenses", "expense_budget"],
+        "budget_maintenance": ["budgeted_maintenance"],
+        "budget_operating_expense": ["budgeted_operating_expense"],
+        "budget_amount": ["budgeted_amount"],
+    }
+    frame = budget
+    for canonical, candidates in aliases.items():
+        if canonical not in frame.columns:
+            source = next((column for column in candidates if column in frame.columns), None)
+            if source:
+                frame = frame.withColumnRenamed(source, canonical)
 
-fact_budget = lookup_key(budget, dim_property, "property_id", "property_key")
-period_column = next(
-    (column for column in ["budget_period", "budget_date", "period_start", "month_start"] if column in fact_budget.columns),
-    None,
-)
-period_date = F.to_date(F.col(period_column)) if period_column else F.lit(None).cast("date")
-
-if "budget_year" in fact_budget.columns:
-    year_expression = F.coalesce(F.col("budget_year").cast("int"), F.year(period_date))
-elif period_column:
-    year_expression = F.year(period_date)
-elif "budget_month" in fact_budget.columns:
-    parsed_month_date = F.coalesce(
-        F.to_date(F.col("budget_month")),
-        F.to_date(F.concat(F.col("budget_month").cast("string"), F.lit("-01"))),
+    frame = lookup_key(frame, dim_property, "property_id", "property_key")
+    period_column = next(
+        (column for column in ["budget_period", "budget_date", "period_start", "month_start"] if column in frame.columns),
+        None,
     )
-    year_expression = F.year(parsed_month_date)
-else:
-    raise ValueError(f"Unable to derive budget year. Available columns: {sorted(fact_budget.columns)}")
-
-if "budget_month" in fact_budget.columns:
-    parsed_month_date = F.coalesce(
-        F.to_date(F.col("budget_month")),
-        F.to_date(F.concat(F.col("budget_month").cast("string"), F.lit("-01"))),
-    )
-    numeric_month = F.col("budget_month").cast("int")
-    month_expression = F.when(numeric_month.between(1, 12), numeric_month).otherwise(F.month(parsed_month_date))
-else:
-    month_expression = F.month(period_date)
-
-fact_budget = (
-    fact_budget.withColumn("budget_year", year_expression)
-    .withColumn("budget_month", F.coalesce(month_expression, F.lit(1)))
-)
-budget_grain = existing(fact_budget, ["property_id", "budget_year", "budget_month"])
-fact_budget = (
-    fact_budget.withColumn("budget_key", stable_key("property_budget", budget_grain))
-    .withColumn("budget_date_key", F.col("budget_year").cast("long") * 10000 + month_expression * 100 + 1)
-)
-for measure in [
-    "budget_revenue", "budget_expense", "budget_maintenance",
-    "budget_operating_expense", "budget_amount",
-]:
-    if measure in fact_budget.columns:
-        fact_budget = fact_budget.withColumn(measure, F.coalesce(F.col(measure).cast("decimal(18,2)"), F.lit(0)))
-if "budget_expense" not in fact_budget.columns:
-    expense_components = [
-        column for column in ["budget_maintenance", "budget_operating_expense"]
-        if column in fact_budget.columns
-    ]
-    if expense_components:
-        fact_budget = fact_budget.withColumn(
-            "budget_expense",
-            reduce(lambda left, right: left + right, [F.col(column) for column in expense_components]),
+    period_date = F.to_date(F.col(period_column)) if period_column else F.lit(None).cast("date")
+    if "budget_month" in frame.columns:
+        parsed_month_date = F.coalesce(
+            F.to_date(F.col("budget_month")),
+            F.to_date(F.concat(F.col("budget_month").cast("string"), F.lit("-01"))),
         )
-if "budget_expense" in fact_budget.columns:
-    fact_budget = fact_budget.withColumn("budget_expense", F.abs(F.col("budget_expense")))
-if "budget_revenue" in fact_budget.columns and "budget_expense" in fact_budget.columns:
-    fact_budget = fact_budget.withColumn("budget_noi", F.col("budget_revenue") - F.col("budget_expense"))
-budget_columns = [
-    "budget_key", "property_key", "budget_date_key", "budget_year", "budget_month",
-    "budget_revenue", "budget_maintenance", "budget_operating_expense",
-    "budget_expense", "budget_noi", "budget_amount",
-    "pipeline_run_id", "silver_processed_timestamp",
-]
-fact_budget = fact_budget.select(*existing(fact_budget, budget_columns))
+        numeric_month = F.col("budget_month").cast("int")
+        month = F.when(numeric_month.between(1, 12), numeric_month).otherwise(F.month(parsed_month_date))
+    else:
+        parsed_month_date = F.lit(None).cast("date")
+        month = F.month(period_date)
+    year_candidates = [F.year(period_date), F.year(parsed_month_date)]
+    if "budget_year" in frame.columns:
+        year_candidates.insert(0, F.col("budget_year").cast("int"))
+
+    frame = (
+        frame.withColumn("budget_year", F.coalesce(*year_candidates))
+        .withColumn("budget_month", F.coalesce(month, F.lit(1)).cast("int"))
+    )
+    if frame.filter(F.col("budget_year").isNull()).limit(1).count():
+        raise ValueError(
+            "Unable to derive budget year. Expected budget_year, year, fiscal_year, budget_period, "
+            f"budget_date, period_start, or a date-formatted budget_month. Available columns: {sorted(frame.columns)}"
+        )
+    frame = frame.withColumn(
+        "budget_date_key", F.col("budget_year").cast("long") * 10000 + F.col("budget_month") * 100 + 1
+    )
+    for column in ["budget_revenue", "budget_expense", "budget_maintenance", "budget_operating_expense", "budget_amount"]:
+        if column in frame.columns:
+            frame = frame.withColumn(column, measure(frame, column))
+    if "budget_expense" not in frame.columns:
+        components = existing(frame, ["budget_maintenance", "budget_operating_expense"])
+        if components:
+            frame = frame.withColumn(
+                "budget_expense", reduce(lambda left, right: left + right, [F.col(column) for column in components])
+            )
+    if "budget_expense" in frame.columns:
+        frame = frame.withColumn("budget_expense", F.abs(F.col("budget_expense")))
+    if "budget_revenue" in frame.columns and "budget_expense" in frame.columns:
+        frame = frame.withColumn("budget_noi", F.col("budget_revenue") - F.col("budget_expense"))
+    frame = frame.withColumn(
+        "budget_key", stable_key("property_budget", existing(frame, ["property_id", "budget_year", "budget_month"]))
+    )
+    columns = [
+        "budget_key", "property_key", "budget_date_key", "budget_year", "budget_month",
+        "budget_revenue", "budget_maintenance", "budget_operating_expense",
+        "budget_expense", "budget_noi", "budget_amount",
+        "pipeline_run_id", "silver_processed_timestamp",
+    ]
+    return frame.select(*existing(frame, columns))
 
 
-spark.sql("CREATE SCHEMA IF NOT EXISTS gold")
-metrics = [
-    write_gold("dim_property", dim_property),
-    write_gold("dim_tenant", dim_tenant),
-    write_gold("dim_date", dim_date),
-    write_gold("fact_lease", fact_lease),
-    write_gold("fact_rent_payment", fact_payment),
-    write_gold("fact_maintenance_request", fact_maintenance),
-    write_gold("fact_property_budget", fact_budget),
-]
-display(spark.createDataFrame(metrics))
+def build_models(spark, silver: dict, gold_config: dict) -> dict:
+    dim_property = build_dim_property(silver["properties"], silver.get("property_region_mapping"))
+    dim_tenant = build_dim_tenant(silver["tenants"])
+    return {
+        "dim_property": dim_property,
+        "dim_tenant": dim_tenant,
+        "dim_date": build_dim_date(spark, **gold_config["date_dimension"]),
+        "fact_lease": build_fact_lease(silver["leases"], dim_property, dim_tenant),
+        "fact_rent_payment": build_fact_rent_payment(silver["rent_payments"], silver["leases"], dim_property, dim_tenant),
+        "fact_maintenance_request": build_fact_maintenance(silver["maintenance_requests"], dim_property),
+        "fact_property_budget": build_fact_property_budget(silver["property_budget"], dim_property),
+    }
+
+
+def main(spark, config_directory: str = CONFIG_DIRECTORY) -> list:
+    gold_config = load_config(f"{config_directory}/gold_model_config.json")
+    sources = ["properties", "property_region_mapping", "tenants", "leases", "rent_payments",
+               "maintenance_requests", "property_budget"]
+    models = build_models(spark, {name: spark.table(f"silver.{name}") for name in sources}, gold_config)
+    for name, frame in models.items():
+        assert_unique_grain(name, frame, GRAINS[name])
+
+    spark.sql("CREATE SCHEMA IF NOT EXISTS gold")
+    metrics = []
+    for name, frame in models.items():
+        frame.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"gold.{name}")
+        metrics.append({"model": name, "rows_written": spark.table(f"gold.{name}").count()})
+    return metrics
+
+
+if __name__ == "__main__":
+    display(spark.createDataFrame(main(spark)))  # noqa: F821 - spark and display are Fabric notebook globals

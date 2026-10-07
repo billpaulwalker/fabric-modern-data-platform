@@ -66,12 +66,13 @@ rows_read = rows_valid + rows_rejected + duplicate_rows_removed
 
 1. Create or attach a schema-enabled Lakehouse.
 2. Ensure Phase 2 data exists as `bronze.<table>` Delta tables.
-3. Create a Fabric notebook from `notebooks/fabric/04_silver_transformations_pyspark.py`.
-4. Attach the Lakehouse to the notebook.
-5. Run all cells.
-6. Confirm Delta tables in the `silver` schema.
-7. Review `silver_quarantine.rejected_records`.
-8. Run `sql/silver_acceptance_queries.sql` through the SQL analytics endpoint.
+3. Upload `config/silver_table_config.json` to the Lakehouse at `Files/config/`. The notebook reads the same contract, including `column_mappings` and `derived_columns`, as the local pipeline, and fails before writing if a configured column is absent from Bronze.
+4. Create a Fabric notebook from `notebooks/fabric/04_silver_transformations_pyspark.py`.
+5. Attach the Lakehouse to the notebook.
+6. Run all cells.
+7. Confirm Delta tables in the `silver` schema.
+8. Review `silver_quarantine.rejected_records`.
+9. Run `sql/silver_acceptance_queries.sql` through the SQL analytics endpoint.
 
 If the Lakehouse does not support schemas, use table prefixes such as `silver_leases` and `silver_quarantine_rejected_records` instead.
 
