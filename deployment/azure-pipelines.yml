@@ -27,12 +27,23 @@ stages:
             displayName: Install dependencies
           - script: python notebooks/07_run_end_to_end_pipeline.py
             displayName: Run end-to-end validation
-          - script: python scripts/validate_release.py --environment dev
-            displayName: Validate release structure
-          - script: python scripts/check_deployment_gates.py --environment dev --write-evidence
-            displayName: Evaluate deployment gates
-          - script: python scripts/create_release_package.py --version ${{ parameters.releaseVersion }}
+          # Validate every promotion target up front so Test and Prod are never promoted on Dev-only evidence.
+          - script: |
+              set -e
+              for environment in dev test prod; do
+                python scripts/validate_release.py --environment "$environment"
+              done
+            displayName: Validate release structure for dev, test, and prod
+          - script: |
+              set -e
+              for environment in dev test prod; do
+                python scripts/check_deployment_gates.py --environment "$environment" --write-evidence
+              done
+            displayName: Evaluate deployment gates for dev, test, and prod
+          - script: python scripts/create_release_package.py --version "$RELEASE_VERSION"
             displayName: Create release package
+            env:
+              RELEASE_VERSION: ${{ parameters.releaseVersion }}
           - publish: dist
             artifact: fabric-release
 

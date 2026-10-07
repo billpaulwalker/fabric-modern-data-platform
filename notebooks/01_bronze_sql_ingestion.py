@@ -31,6 +31,8 @@ sys.path.append(str(REPO_ROOT))
 from src.bronze_utils import generate_pipeline_run_id, ingest_csv_to_bronze
 
 
+# Every local run overwrites its Bronze target, so each source is a full load.
+# config/source_config.csv records the watermark columns for the target incremental design.
 SOURCE_TABLES = [
     {
         "source_system": "CRE_SQL",
@@ -51,21 +53,21 @@ SOURCE_TABLES = [
         "source_object": "leases",
         "input_path": REPO_ROOT / "data/sample/leases.csv",
         "output_path": REPO_ROOT / "data/bronze/bronze_leases.csv",
-        "load_type": "incremental",
+        "load_type": "full",
     },
     {
         "source_system": "CRE_SQL",
         "source_object": "rent_payments",
         "input_path": REPO_ROOT / "data/sample/rent_payments.csv",
         "output_path": REPO_ROOT / "data/bronze/bronze_rent_payments.csv",
-        "load_type": "incremental",
+        "load_type": "full",
     },
     {
         "source_system": "CRE_SQL",
         "source_object": "maintenance_requests",
         "input_path": REPO_ROOT / "data/sample/maintenance_requests.csv",
         "output_path": REPO_ROOT / "data/bronze/bronze_maintenance_requests.csv",
-        "load_type": "incremental",
+        "load_type": "full",
     },
 ]
 

@@ -107,8 +107,11 @@ def default_command_runner(
     )
 
 
-def _tail(value: str, limit: int = 4000) -> str:
-    return value[-limit:].strip()
+def _tail(value: str | bytes | None, limit: int = 4000) -> str:
+    # TimeoutExpired output is bytes even when the step ran with text=True.
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="replace")
+    return (value or "")[-limit:].strip()
 
 
 def _execute_step(
@@ -135,7 +138,7 @@ def _execute_step(
             stdout = _tail(completed.stdout)
         except subprocess.TimeoutExpired as exc:
             status, return_code = "FAILED", None
-            stdout = _tail(exc.stdout or "")
+            stdout = _tail(exc.stdout)
             error = f"Step timed out after {timeout} seconds"
         except Exception as exc:  # noqa: BLE001 - audit unexpected runner failures
             status, return_code, stdout, error = "FAILED", None, "", f"{type(exc).__name__}: {exc}"

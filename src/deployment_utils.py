@@ -4,15 +4,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
 VALID_ENVIRONMENTS = {"dev", "test", "prod"}
 SECRET_FILE_NAMES = {".env", "secrets.json", "credentials.json"}
+SECRET_FILE_SUFFIXES = {".key", ".pem", ".pfx", ".p12"}
+# Semantic version; the value also becomes part of the package file name.
+RELEASE_VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?")
+# Fixed archive metadata so the same inputs always produce the same bytes.
+ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+ZIP_FILE_MODE = 0o100644 << 16
 
 
 def load_json(path: str | Path) -> dict[str, Any]:
@@ -52,13 +59,14 @@ def validate_environment_config(config: dict[str, Any], expected_environment: st
 
 def find_secret_files(repo_root: str | Path) -> list[str]:
     root = Path(repo_root)
-    ignored = {".git", ".venv", "__pycache__", "data", "dist"}
+    # Tooling directories only; data/ is scanned because credentials are often saved beside samples.
+    ignored = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", "dist"}
     findings = []
     for path in root.rglob("*"):
-        if any(part in ignored for part in path.parts) or not path.is_file():
+        if any(part in ignored for part in path.relative_to(root).parts) or not path.is_file():
             continue
-        if path.name.lower() in SECRET_FILE_NAMES or path.suffix.lower() in {".key", ".pem", ".pfx"}:
-            findings.append(str(path.relative_to(root)))
+        if path.name.lower() in SECRET_FILE_NAMES or path.suffix.lower() in SECRET_FILE_SUFFIXES:
+            findings.append(path.relative_to(root).as_posix())
     return sorted(findings)
 
 
@@ -181,18 +189,31 @@ def iter_release_files(
     return sorted(files, key=lambda value: value.as_posix())
 
 
+def validate_release_version(version: str) -> str:
+    if not RELEASE_VERSION_PATTERN.fullmatch(version or ""):
+        raise ValueError(f"Release version must be semantic, such as 1.2.3 or 1.2.3-rc.1; got {version!r}")
+    return version
+
+
+def _archive_entry(name: str) -> ZipInfo:
+    entry = ZipInfo(name, date_time=ZIP_TIMESTAMP)
+    entry.compress_type = ZIP_DEFLATED
+    entry.external_attr = ZIP_FILE_MODE
+    return entry
+
+
 def create_release_package(
     repo_root: str | Path,
     artifact_config: dict[str, Any],
     version: str,
     output_path: str | Path,
 ) -> dict[str, Any]:
+    validate_release_version(version)
     root = Path(repo_root)
     files = iter_release_files(root, artifact_config)
     manifest = {
         "release_name": artifact_config["release_name"],
         "version": version,
-        "created_at": datetime.now(timezone.utc).isoformat(),
         "files": [
             {"path": path.as_posix(), "sha256": sha256_file(root / path)}
             for path in files
@@ -200,8 +221,8 @@ def create_release_package(
     }
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+    with ZipFile(output, "w") as archive:
         for path in files:
-            archive.write(root / path, path.as_posix())
-        archive.writestr("release-manifest.json", json.dumps(manifest, indent=2))
+            archive.writestr(_archive_entry(path.as_posix()), (root / path).read_bytes())
+        archive.writestr(_archive_entry("release-manifest.json"), json.dumps(manifest, indent=2))
     return manifest

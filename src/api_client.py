@@ -4,8 +4,23 @@ from typing import Any, Optional
 import requests
 
 
+MAX_WAIT_SECONDS = 60
+
+
 class ApiClientError(Exception):
     pass
+
+
+def _backoff_seconds(attempt: int) -> int:
+    return min(2 ** attempt, 30)
+
+
+def _retry_after_seconds(response: Any, attempt: int) -> int:
+    """Honour a numeric Retry-After header; fall back to exponential backoff otherwise."""
+    value = str(response.headers.get("Retry-After", "")).strip()
+    if value.isdigit():
+        return min(int(value), MAX_WAIT_SECONDS)
+    return _backoff_seconds(attempt)
 
 
 class ApiClient:
@@ -21,22 +36,26 @@ class ApiClient:
         if self.api_key:
             request_params["appid"] = self.api_key
 
+        last_error = "no attempts made"
         for attempt in range(1, max_retries + 1):
-            response = requests.get(url, params=request_params, timeout=self.timeout_seconds)
+            try:
+                response = requests.get(url, params=request_params, timeout=self.timeout_seconds)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                wait_seconds = _backoff_seconds(attempt)
+            else:
+                if response.status_code == 429:
+                    last_error = "status 429"
+                    wait_seconds = _retry_after_seconds(response, attempt)
+                elif 500 <= response.status_code < 600:
+                    last_error = f"status {response.status_code}"
+                    wait_seconds = _backoff_seconds(attempt)
+                elif response.status_code >= 400:
+                    raise ApiClientError(f"API request failed with status {response.status_code}: {response.text}")
+                else:
+                    return response.json()
 
-            if response.status_code == 429:
-                wait_seconds = min(2 ** attempt, 30)
+            if attempt < max_retries:
                 time.sleep(wait_seconds)
-                continue
 
-            if 500 <= response.status_code < 600:
-                wait_seconds = min(2 ** attempt, 30)
-                time.sleep(wait_seconds)
-                continue
-
-            if response.status_code >= 400:
-                raise ApiClientError(f"API request failed with status {response.status_code}: {response.text}")
-
-            return response.json()
-
-        raise ApiClientError(f"API request failed after {max_retries} retries")
+        raise ApiClientError(f"API request failed after {max_retries} attempts; last error: {last_error}")

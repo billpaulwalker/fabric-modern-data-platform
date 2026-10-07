@@ -10,7 +10,12 @@ dist/
 
 # Secrets
 .env
+secrets.json
+credentials.json
 *.key
+*.pem
+*.pfx
+*.p12
 
 # Local data outputs
 data/output/

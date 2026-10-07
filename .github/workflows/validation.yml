@@ -54,10 +54,14 @@ jobs:
 
       - name: Check that secrets are not committed
         run: |
-          if find . -name ".env" | grep -q .; then
-            echo ".env file found. Do not commit secrets."
-            exit 1
-          fi
+          python - <<'PY'
+          import sys
+          from src.deployment_utils import find_secret_files
+          findings = find_secret_files(".")
+          for path in findings:
+              print(f"Potential secret file: {path}")
+          sys.exit(1 if findings else 0)
+          PY
 
       - name: Compile Python files
         run: |

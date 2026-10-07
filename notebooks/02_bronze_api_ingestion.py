@@ -25,6 +25,10 @@ sys.path.append(str(REPO_ROOT))
 from src.bronze_utils import generate_pipeline_run_id, ingest_api_payload_to_bronze
 
 
+# The sample payload overwrites its Bronze target each run, so this is a full load.
+LOAD_TYPE = "full"
+
+
 def load_sample_api_payload() -> dict:
     sample_path = REPO_ROOT / "data/api_sample/openweather_sample_response.json"
     with sample_path.open("r", encoding="utf-8") as file:
@@ -41,7 +45,7 @@ def main() -> None:
         source_system="OpenWeather",
         source_object="weather",
         pipeline_run_id=pipeline_run_id,
-        load_type="incremental",
+        load_type=LOAD_TYPE,
     )
 
     print("Bronze API ingestion complete")

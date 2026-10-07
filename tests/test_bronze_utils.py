@@ -1,3 +1,4 @@
+import importlib.util
 from pathlib import Path
 
 from src.bronze_utils import (
@@ -63,3 +64,20 @@ def test_ingest_csv_to_bronze_writes_output(tmp_path):
     output_text = output_path.read_text(encoding="utf-8")
     assert "source_system" in output_text
     assert "raw_record_hash" in output_text
+
+
+def _load_bronze_notebook(file_name):
+    path = Path(__file__).resolve().parents[1] / "notebooks" / file_name
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_bronze_sources_are_labelled_as_the_full_loads_they_perform():
+    # Every local Bronze run overwrites its target; "incremental" waits on watermark support.
+    sql = _load_bronze_notebook("01_bronze_sql_ingestion.py")
+    api = _load_bronze_notebook("02_bronze_api_ingestion.py")
+    files = _load_bronze_notebook("03_bronze_file_ingestion.py")
+    load_types = {source["load_type"] for source in [*sql.SOURCE_TABLES, *files.BUSINESS_FILES]}
+    assert load_types | {api.LOAD_TYPE} == {"full"}

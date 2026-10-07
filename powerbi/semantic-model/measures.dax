@@ -58,8 +58,10 @@ DEFINE
     MEASURE 'fact_maintenance_request'[Actual Maintenance Cost] =
         SUM('fact_maintenance_request'[actual_cost])
 
+    -- Row-level variance is null until an actual cost exists, so open or uncosted
+    -- requests are excluded instead of reading as a full negative variance.
     MEASURE 'fact_maintenance_request'[Maintenance Cost Variance] =
-        [Actual Maintenance Cost] - [Estimated Maintenance Cost]
+        SUM('fact_maintenance_request'[cost_variance])
 
     MEASURE 'fact_maintenance_request'[Average Resolution Days] =
         AVERAGE('fact_maintenance_request'[resolution_days])

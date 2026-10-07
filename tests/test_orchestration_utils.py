@@ -56,3 +56,20 @@ def test_config_rejects_unknown_dependency():
         assert "unknown dependencies" in str(error)
     else:
         raise AssertionError("Expected invalid pipeline configuration to fail")
+
+
+def test_timed_out_step_records_partial_output_as_text(tmp_path):
+    def runner(command, cwd, environment, timeout):
+        # TimeoutExpired carries bytes even when the process ran with text=True.
+        raise subprocess.TimeoutExpired(command, timeout, output=b"loaded 10 rows\xe2\x9c\x93")
+
+    config = {
+        "pipeline_name": "test_pipeline",
+        "audit_directory": "audit",
+        "steps": [{"name": "slow", "command": ["slow.py"], "depends_on": [], "timeout_seconds": 1}],
+    }
+    result = run_pipeline(config, tmp_path, runner)
+    step = result.step_results[0]
+    assert step.status == "FAILED"
+    assert step.stdout_tail == "loaded 10 rows✓"
+    assert "b'" not in (tmp_path / "audit/pipeline_step_runs.jsonl").read_text(encoding="utf-8")

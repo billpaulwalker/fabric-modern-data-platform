@@ -1,9 +1,15 @@
 import json
+import os
+import time
 from zipfile import ZipFile
+
+import pytest
 
 from src.deployment_utils import (
     create_release_package,
     evaluate_deployment_gates,
+    find_secret_files,
+    sha256_file,
     validate_environment_config,
     validate_release_structure,
 )
@@ -109,3 +115,49 @@ def test_deployment_gate_fails_when_silver_evidence_is_missing(tmp_path):
     report = evaluate_deployment_gates(tmp_path, "dev")
     assert "silver_configured_columns_present" in report.checks
     assert any("Silver run metrics" in issue for issue in report.issues)
+
+
+def _package_fixture(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    return {
+        "release_name": "test-release",
+        "required_paths": ["src"],
+        "excluded_directories": [],
+        "excluded_suffixes": [],
+    }
+
+
+@pytest.mark.parametrize("version", ["1.0", "v1.0.0", "1.0.0; rm -rf /", "../../1.0.0", "1.0.0/evil", ""])
+def test_release_package_rejects_unsafe_or_non_semver_versions(tmp_path, version):
+    config = _package_fixture(tmp_path)
+    with pytest.raises(ValueError, match="version"):
+        create_release_package(tmp_path, config, version, tmp_path / "dist/release.zip")
+
+
+def test_release_package_accepts_semver_with_prerelease(tmp_path):
+    config = _package_fixture(tmp_path)
+    manifest = create_release_package(tmp_path, config, "1.2.3-rc.1", tmp_path / "dist/release.zip")
+    assert manifest["version"] == "1.2.3-rc.1"
+
+
+def test_release_package_is_byte_for_byte_reproducible(tmp_path):
+    config = _package_fixture(tmp_path)
+    first = tmp_path / "dist/first.zip"
+    second = tmp_path / "dist/second.zip"
+    create_release_package(tmp_path, config, "1.0.0", first)
+    os.utime(tmp_path / "src/app.py", (1_000_000_000, 1_000_000_000))
+    time.sleep(1.1)
+    create_release_package(tmp_path, config, "1.0.0", second)
+    assert sha256_file(first) == sha256_file(second)
+
+
+def test_secret_scan_covers_data_folder_and_key_formats(tmp_path):
+    for relative in ["data/api_sample/credentials.json", "config/cert.pfx", "keys/client.p12", "keys/server.pem"]:
+        (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / relative).write_text("secret", encoding="utf-8")
+    (tmp_path / ".venv/lib").mkdir(parents=True)
+    (tmp_path / ".venv/lib/vendor.pem").write_text("ignored", encoding="utf-8")
+    assert find_secret_files(tmp_path) == [
+        "config/cert.pfx", "data/api_sample/credentials.json", "keys/client.p12", "keys/server.pem",
+    ]

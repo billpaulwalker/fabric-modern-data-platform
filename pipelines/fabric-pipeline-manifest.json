@@ -9,6 +9,7 @@
     {
       "name": "nb_silver_transformations",
       "type": "Notebook",
+      "notebook": "notebooks/fabric/04_silver_transformations_pyspark.py",
       "depends_on": ["nb_bronze_sql", "nb_bronze_api", "nb_bronze_files"],
       "dependency_condition": "Succeeded",
       "retry": 0,
@@ -17,6 +18,7 @@
     {
       "name": "nb_gold_dimensional_model",
       "type": "Notebook",
+      "notebook": "notebooks/fabric/05_gold_dimensional_model_pyspark.py",
       "depends_on": ["nb_silver_transformations"],
       "dependency_condition": "Succeeded",
       "retry": 0,
@@ -25,6 +27,7 @@
     {
       "name": "nb_semantic_validation",
       "type": "Notebook",
+      "notebook": "notebooks/fabric/06_validate_semantic_model_pyspark.py",
       "depends_on": ["nb_gold_dimensional_model"],
       "dependency_condition": "Succeeded",
       "retry": 0,

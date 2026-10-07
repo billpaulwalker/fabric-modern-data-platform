@@ -32,6 +32,7 @@ def _load_notebook(file_name, module_name):
 
 silver_nb = _load_notebook("04_silver_transformations_pyspark.py", "silver_notebook")
 gold_nb = _load_notebook("05_gold_dimensional_model_pyspark.py", "gold_notebook")
+semantic_nb = _load_notebook("06_validate_semantic_model_pyspark.py", "semantic_notebook")
 
 
 @pytest.fixture(scope="module")
@@ -266,3 +267,75 @@ def test_sample_gold_matches_local_pandas_results(sample_gold):
     assert models["fact_property_budget"].filter(F.col("budget_date_key").isNull()).count() == 0
     for name, grain in gold_nb.GRAINS.items():
         gold_nb.assert_unique_grain(name, models[name], grain)
+
+
+# Semantic validation ------------------------------------------------------------
+
+SEMANTIC_CONFIG = {
+    "model_name": "Test Model",
+    "unknown_member_key": 0,
+    "max_unknown_member_ratio": 0.1,
+    "tables": {
+        "dim_property": {"key": "property_key", "required_columns": ["property_key"]},
+        "fact_payment": {
+            "key": "payment_key",
+            "required_columns": ["payment_key", "property_key", "amount"],
+            "non_empty_columns": ["amount"],
+        },
+    },
+    "relationships": [{
+        "name": "Property to Payment",
+        "from_table": "dim_property", "from_column": "property_key",
+        "to_table": "fact_payment", "to_column": "property_key", "active": True,
+    }],
+}
+
+
+def _validate(csv_frame, payments, properties=({"property_key": "0"}, {"property_key": "101"})):
+    tables = {"dim_property": csv_frame(list(properties)), "fact_payment": csv_frame(payments)}
+    return semantic_nb.validate_gold_tables(tables, SEMANTIC_CONFIG)
+
+
+def test_semantic_validation_passes_clean_star(csv_frame):
+    report = _validate(csv_frame, [{"payment_key": "1", "property_key": "101", "amount": "50"}])
+    assert report["passed"], report["issues"]
+    assert report["table_rows"] == {"dim_property": 2, "fact_payment": 1}
+
+
+def test_semantic_validation_flags_unknown_member_share(csv_frame):
+    report = _validate(csv_frame, [
+        {"payment_key": "1", "property_key": "0", "amount": "50"},
+        {"payment_key": "2", "property_key": "101", "amount": "50"},
+    ])
+    assert any("Unknown member" in issue and "50.0%" in issue for issue in report["issues"])
+
+
+def test_semantic_validation_flags_null_foreign_keys_and_orphans(csv_frame):
+    report = _validate(csv_frame, [
+        {"payment_key": "1", "property_key": "", "amount": "50"},
+        {"payment_key": "2", "property_key": "999", "amount": "50"},
+    ])
+    assert any("1 null foreign keys" in issue for issue in report["issues"])
+    assert any("orphan keys" in issue and "999" in issue for issue in report["issues"])
+
+
+def test_semantic_validation_flags_all_zero_measures_and_key_problems(csv_frame):
+    report = _validate(csv_frame, [
+        {"payment_key": "1", "property_key": "101", "amount": "0"},
+        {"payment_key": "1", "property_key": "101", "amount": ""},
+    ])
+    assert any("fact_payment.amount has no non-zero values" in issue for issue in report["issues"])
+    assert any("fact_payment.payment_key is not unique" in issue for issue in report["issues"])
+
+
+def test_semantic_validation_flags_missing_tables_and_columns(csv_frame):
+    tables = {"dim_property": csv_frame([{"property_key": "0"}])}
+    report = semantic_nb.validate_gold_tables(tables, SEMANTIC_CONFIG)
+    assert any("Missing Gold table: fact_payment" in issue for issue in report["issues"])
+
+
+def test_sample_gold_passes_real_semantic_contract(sample_gold):
+    _, models = sample_gold
+    config = semantic_nb.load_config(REPO_ROOT / "config/semantic_model_config.json")
+    report = semantic_nb.validate_gold_tables(models, config)
+    assert report["issues"] == []
