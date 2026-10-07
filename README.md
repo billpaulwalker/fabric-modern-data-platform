@@ -394,6 +394,7 @@ Generated releases are written to `dist/` and should not be committed.
 
 ## Documentation
 
+- Running in Microsoft Fabric: `docs/fabric-getting-started.md`
 - Architecture and layer guides: `architecture/` and `docs/`
 - Power BI implementation: `powerbi/semantic-model/build-guide.md`
 - Operations: `docs/operations-runbook-phase-6.md`
@@ -404,4 +405,4 @@ Generated releases are written to `dist/` and should not be committed.
 
 ## Project Status
 
-All seven repository phases are implemented. The next milestone is provisioning the documented Fabric resources, running the PySpark/Delta notebooks in a Development workspace, creating the Direct Lake semantic model and report, and capturing deployment and portfolio screenshots.
+All seven repository phases are implemented, and the full Fabric notebook chain (Bronze, Silver, Gold, semantic validation) is tested locally on Spark 3.5. The current milestone is running that chain in a Fabric Development workspace by following `docs/fabric-getting-started.md`, then building the Data Pipeline, Direct Lake semantic model and report, and Dev/Test/Prod deployment, and capturing portfolio screenshots.

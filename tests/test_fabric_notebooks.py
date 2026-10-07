@@ -30,6 +30,7 @@ def _load_notebook(file_name, module_name):
     return module
 
 
+bronze_nb = _load_notebook("01_bronze_ingestion_pyspark.py", "bronze_notebook")
 silver_nb = _load_notebook("04_silver_transformations_pyspark.py", "silver_notebook")
 gold_nb = _load_notebook("05_gold_dimensional_model_pyspark.py", "gold_notebook")
 semantic_nb = _load_notebook("06_validate_semantic_model_pyspark.py", "semantic_notebook")
@@ -65,6 +66,72 @@ def csv_frame(spark, tmp_path):
 
 def _rows(frame, key):
     return {row[key]: row.asDict() for row in frame.collect()}
+
+
+# Bronze -----------------------------------------------------------------------
+
+BRONZE_CONFIG_PATH = REPO_ROOT / "config/bronze_source_config.json"
+# The repository's data/ folder mirrors the Lakehouse Files/landing/ folder.
+LANDING_ROOT = str(REPO_ROOT / "data")
+
+
+def _source(name):
+    sources = bronze_nb.load_config(BRONZE_CONFIG_PATH)["sources"]
+    return next(source for source in sources if source["name"] == name)
+
+
+def test_bronze_sources_match_silver_tables():
+    bronze_names = {source["name"] for source in bronze_nb.load_config(BRONZE_CONFIG_PATH)["sources"]}
+    silver_names = {table["name"] for table in silver_nb.load_config(REPO_ROOT / "config/silver_table_config.json")["tables"]}
+    assert bronze_names == silver_names
+
+
+def test_bronze_csv_lands_raw_strings_with_audit_columns(spark):
+    frame = bronze_nb.ingest_source(spark, _source("leases"), LANDING_ROOT, "run-1", "2026-06-20T00:00:00Z")
+    rows = _rows(frame, "lease_id")
+    assert len(rows) == 6
+    assert rows["301"]["monthly_rate_per_sqft"] == "4.15"
+    assert {column: rows["301"][column] for column in ["source_system", "source_object", "source_file_name",
+                                                      "pipeline_run_id", "load_type"]} == {
+        "source_system": "CRE_SQL", "source_object": "leases", "source_file_name": "leases.csv",
+        "pipeline_run_id": "run-1", "load_type": "full",
+    }
+    # Format in Spark: collect() converts timestamps to the local machine's time zone.
+    landed = frame.select(F.date_format("ingestion_timestamp", "yyyy-MM-dd HH:mm").alias("at")).distinct().collect()
+    assert [row["at"] for row in landed] == ["2026-06-20 00:00"]
+    assert len(rows["301"]["raw_record_hash"]) == 64
+    assert len({row["raw_record_hash"] for row in rows.values()}) == 6
+
+
+def test_bronze_hash_ignores_audit_columns_and_is_stable(spark):
+    first = bronze_nb.ingest_source(spark, _source("tenants"), LANDING_ROOT, "run-1", "2026-06-20T00:00:00Z")
+    second = bronze_nb.ingest_source(spark, _source("tenants"), LANDING_ROOT, "run-2", "2026-06-21T00:00:00Z")
+    assert _rows(first, "tenant_id")["201"]["raw_record_hash"] == _rows(second, "tenant_id")["201"]["raw_record_hash"]
+
+
+def test_bronze_api_payload_stays_nested_for_silver_to_flatten(spark):
+    frame = bronze_nb.ingest_source(spark, _source("weather_api_raw"), LANDING_ROOT, "run-1", "2026-06-20T00:00:00Z")
+    assert frame.count() == 1
+    assert "main" in frame.columns and "main_temp" not in frame.columns
+    silver_config = next(
+        table for table in silver_nb.load_config(REPO_ROOT / "config/silver_table_config.json")["tables"]
+        if table["name"] == "weather_api_raw"
+    )
+    valid, _, metrics = silver_nb.transform_table(frame, silver_config)
+    assert float(valid.collect()[0]["main_temp"]) == 72.4
+    assert metrics["missing_configured_columns"] == []
+
+
+def test_bronze_missing_landing_file_explains_the_upload(spark, tmp_path):
+    with pytest.raises(FileNotFoundError, match="Files/landing"):
+        bronze_nb.ingest_source(spark, _source("leases"), str(tmp_path), "run-1", "2026-06-20T00:00:00Z")
+
+
+def test_bronze_rejects_source_columns_that_collide_with_audit_columns(spark, tmp_path):
+    (tmp_path / "sample").mkdir()
+    (tmp_path / "sample/leases.csv").write_text("lease_id,load_type\n1,manual\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="load_type"):
+        bronze_nb.ingest_source(spark, _source("leases"), str(tmp_path), "run-1", "2026-06-20T00:00:00Z")
 
 
 # Silver -----------------------------------------------------------------------
@@ -227,16 +294,14 @@ def test_gold_duplicate_grain_is_rejected(csv_frame):
 
 @pytest.fixture(scope="module")
 def sample_gold(spark):
-    silver_configs = silver_nb.load_config(REPO_ROOT / "config/silver_table_config.json")["tables"]
+    # The full Fabric chain: landing files -> Bronze -> Silver -> Gold.
+    bronze = {
+        source["name"]: bronze_nb.ingest_source(spark, source, LANDING_ROOT, "test_run", "2026-06-20T00:00:00Z")
+        for source in bronze_nb.load_config(BRONZE_CONFIG_PATH)["sources"]
+    }
     silver, metrics = {}, []
-    for config in silver_configs:
-        if config["input_format"] != "csv":
-            continue
-        bronze = (
-            spark.read.option("header", True).csv(str(REPO_ROOT / f"data/sample/{config['name']}.csv"))
-            .withColumn("ingestion_timestamp", F.lit("2026-06-20T00:00:00Z"))
-        )
-        valid, _, table_metrics = silver_nb.transform_table(bronze, config)
+    for config in silver_nb.load_config(REPO_ROOT / "config/silver_table_config.json")["tables"]:
+        valid, _, table_metrics = silver_nb.transform_table(bronze[config["name"]], config)
         silver[config["name"]] = valid.cache()
         metrics.append(table_metrics)
     gold_config = silver_nb.load_config(REPO_ROOT / "config/gold_model_config.json")
