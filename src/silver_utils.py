@@ -66,6 +66,44 @@ def _present(frame: pd.DataFrame, columns: list[str]) -> list[str]:
     return [column for column in columns if column in frame.columns]
 
 
+def apply_column_mappings(frame: pd.DataFrame, mappings: dict[str, str]) -> pd.DataFrame:
+    """Rename source columns to model column names; both sides are snake_case-normalized."""
+    renamed = {}
+    for source, target in mappings.items():
+        source, target = normalize_column_name(source), normalize_column_name(target)
+        if source not in frame.columns:
+            continue
+        if target in frame.columns:
+            raise SilverSchemaError(f"Column mapping {source} -> {target} collides with an existing column")
+        renamed[source] = target
+    return frame.rename(columns=renamed)
+
+
+def apply_derived_columns(frame: pd.DataFrame, derivations: dict[str, dict[str, list[str]]]) -> pd.DataFrame:
+    """Calculate configured columns from typed inputs. Supported operation: product."""
+    result = frame.copy()
+    for target, rule in derivations.items():
+        target = normalize_column_name(target)
+        if set(rule) != {"product"}:
+            raise SilverSchemaError(f"Unsupported derivation for {target}: {sorted(rule)}")
+        inputs = [normalize_column_name(column) for column in rule["product"]]
+        missing = [column for column in inputs if column not in result.columns]
+        if missing:
+            raise SilverSchemaError(f"Cannot derive {target}; missing input columns: {missing}")
+        product = pd.to_numeric(result[inputs[0]], errors="coerce").astype("Float64")
+        for column in inputs[1:]:
+            product = product * pd.to_numeric(result[column], errors="coerce").astype("Float64")
+        result[target] = product
+    return result
+
+
+def _configured_columns(config: dict[str, Any]) -> set[str]:
+    columns = set(config.get("column_types", {})) | set(config.get("allowed_values", {}))
+    columns |= set(config.get("non_negative_columns", []))
+    columns |= {column for rule in config.get("date_order_rules", []) for column in rule}
+    return {normalize_column_name(column) for column in columns}
+
+
 def _append_reason(reasons: pd.Series, mask: pd.Series, reason: str) -> pd.Series:
     current = reasons.fillna("").astype(str)
     separator = current.where(current.eq(""), " | ")
@@ -96,6 +134,7 @@ def _cast_column(series: pd.Series, target_type: str) -> pd.Series:
 def transform_to_silver(frame: pd.DataFrame, config: dict[str, Any]) -> SilverResult:
     """Standardize, validate, quarantine, and deduplicate one Bronze dataset."""
     silver = normalize_columns(frame)
+    silver = apply_column_mappings(silver, config.get("column_mappings", {}))
     silver = silver.replace(r"^\s*$", pd.NA, regex=True)
     silver["_source_row_number"] = range(1, len(silver) + 1)
     reasons = pd.Series("", index=silver.index, dtype="string")
@@ -114,6 +153,9 @@ def transform_to_silver(frame: pd.DataFrame, config: dict[str, Any]) -> SilverRe
         invalid = original.notna() & converted.isna()
         reasons = _append_reason(reasons, invalid, f"invalid_{target_type}:{column}")
         silver[column] = converted
+
+    silver = apply_derived_columns(silver, config.get("derived_columns", {}))
+    missing_configured = sorted(_configured_columns(config) - set(silver.columns))
 
     for column in required:
         reasons = _append_reason(reasons, silver[column].isna(), f"required:{column}")
@@ -167,6 +209,7 @@ def transform_to_silver(frame: pd.DataFrame, config: dict[str, Any]) -> SilverRe
         "rows_valid": len(valid),
         "rows_rejected": len(rejected),
         "duplicate_rows_removed": duplicate_rows_removed,
+        "missing_configured_columns": missing_configured,
     }
     return SilverResult(valid=valid, rejected=rejected, metrics=metrics)
 

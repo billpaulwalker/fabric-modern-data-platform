@@ -37,11 +37,15 @@
         "tenant_id": "integer",
         "lease_start_date": "date",
         "lease_end_date": "date",
-        "monthly_rent": "decimal",
+        "leased_square_feet": "decimal",
+        "monthly_rate_per_sqft": "decimal",
         "updated_at": "datetime",
         "ingestion_timestamp": "datetime"
       },
-      "non_negative_columns": ["monthly_rent"],
+      "derived_columns": {
+        "monthly_rent": {"product": ["leased_square_feet", "monthly_rate_per_sqft"]}
+      },
+      "non_negative_columns": ["leased_square_feet", "monthly_rate_per_sqft", "monthly_rent"],
       "date_order_rules": [["lease_start_date", "lease_end_date"]]
     },
     {
@@ -49,9 +53,16 @@
       "input_format": "csv",
       "primary_key": ["payment_id"],
       "required_columns": ["payment_id", "lease_id"],
+      "column_mappings": {
+        "amount_billed": "amount_due",
+        "payment_amount": "amount_paid"
+      },
       "column_types": {
         "payment_id": "integer",
         "lease_id": "integer",
+        "property_id": "integer",
+        "tenant_id": "integer",
+        "payment_due_date": "date",
         "payment_date": "date",
         "amount_due": "decimal",
         "amount_paid": "decimal",
@@ -65,17 +76,22 @@
       "input_format": "csv",
       "primary_key": ["request_id"],
       "required_columns": ["request_id", "property_id"],
+      "column_mappings": {
+        "opened_date": "request_date",
+        "closed_date": "completed_date",
+        "request_category": "category",
+        "request_status": "status"
+      },
       "column_types": {
         "request_id": "integer",
         "property_id": "integer",
         "request_date": "date",
         "completed_date": "date",
         "estimated_cost": "decimal",
-        "actual_cost": "decimal",
         "updated_at": "datetime",
         "ingestion_timestamp": "datetime"
       },
-      "non_negative_columns": ["estimated_cost", "actual_cost"],
+      "non_negative_columns": ["estimated_cost"],
       "date_order_rules": [["request_date", "completed_date"]]
     },
     {
@@ -85,14 +101,10 @@
       "required_columns": ["property_id", "budget_month"],
       "column_types": {
         "property_id": "integer",
-        "budget_year": "integer",
         "budget_month": "string",
         "budgeted_rent": "decimal",
         "budgeted_maintenance": "decimal",
         "budgeted_operating_expense": "decimal",
-        "budget_revenue": "decimal",
-        "budget_expense": "decimal",
-        "budget_amount": "decimal",
         "ingestion_timestamp": "datetime"
       },
       "non_negative_columns": ["budgeted_rent", "budgeted_maintenance", "budgeted_operating_expense"]

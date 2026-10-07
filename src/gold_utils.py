@@ -49,8 +49,9 @@ def date_key(series: pd.Series) -> pd.Series:
 
 
 def numeric(frame: pd.DataFrame, column: str, default: float = 0.0) -> pd.Series:
+    """Coerce a measure column; a column absent from the source stays null rather than reading as zero."""
     if column not in frame.columns:
-        return pd.Series(default, index=frame.index, dtype="Float64")
+        return pd.Series(pd.NA, index=frame.index, dtype="Float64")
     return pd.to_numeric(frame[column], errors="coerce").fillna(default).astype("Float64")
 
 
@@ -162,7 +163,15 @@ def build_fact_rent_payment(
         raise ValueError("fact_rent_payment requires payment_id")
     lease_columns = [column for column in ["lease_id", "property_id", "tenant_id"] if column in leases.columns]
     if "lease_id" in frame.columns and "lease_id" in lease_columns:
-        frame = frame.merge(leases[lease_columns].drop_duplicates("lease_id"), on="lease_id", how="left")
+        frame = frame.merge(
+            leases[lease_columns].drop_duplicates("lease_id"), on="lease_id", how="left", suffixes=("", "_lease")
+        )
+        # Payment-level IDs win; the lease supplies them only where the payment has none.
+        for column in lease_columns[1:]:
+            lease_column = f"{column}_lease"
+            if lease_column in frame.columns:
+                frame[column] = frame[column].fillna(frame[lease_column])
+                frame = frame.drop(columns=lease_column)
     frame = _lookup_key(frame, dim_property, "property_id", "property_key")
     frame = _lookup_key(frame, dim_tenant, "tenant_id", "tenant_key")
     frame["payment_date_key"] = date_key(frame.get("payment_date", pd.Series(index=frame.index, dtype=object)))

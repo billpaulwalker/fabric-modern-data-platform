@@ -123,6 +123,19 @@ def evaluate_deployment_gates(repo_root: str | Path, environment: str) -> Deploy
         "Latest end-to-end pipeline run is missing or did not succeed",
     )
 
+    silver_path = root / "data/silver/silver_run_metrics.json"
+    silver_metrics = load_json(silver_path) if silver_path.exists() else None
+    silver_gaps = {
+        item.get("table", "unknown"): item["missing_configured_columns"]
+        for item in silver_metrics or []
+        if item.get("missing_configured_columns")
+    }
+    report.add(
+        bool(silver_metrics) and not silver_gaps,
+        "silver_configured_columns_present",
+        f"Silver run metrics are missing or configured columns are absent from source: {silver_gaps}",
+    )
+
     semantic_path = root / "data/gold/semantic_model_validation.json"
     semantic = load_json(semantic_path) if semantic_path.exists() else None
     report.add(

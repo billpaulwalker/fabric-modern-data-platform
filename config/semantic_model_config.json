@@ -2,6 +2,8 @@
   "model_name": "CRE Portfolio Analytics",
   "storage_mode": "Direct Lake",
   "date_table": "dim_date",
+  "unknown_member_key": 0,
+  "max_unknown_member_ratio": 0.01,
   "tables": {
     "dim_property": {
       "key": "property_key",
@@ -21,21 +23,25 @@
     "fact_lease": {
       "key": "lease_key",
       "required_columns": ["lease_key", "lease_id", "property_key", "tenant_key", "lease_start_date_key", "lease_end_date_key", "monthly_rent", "annualized_rent", "lease_status"],
+      "non_empty_columns": ["monthly_rent", "annualized_rent"],
       "hidden_columns": ["lease_key", "lease_id", "property_key", "tenant_key", "lease_start_date_key", "lease_end_date_key", "pipeline_run_id", "silver_processed_timestamp"]
     },
     "fact_rent_payment": {
       "key": "payment_key",
       "required_columns": ["payment_key", "payment_id", "property_key", "tenant_key", "payment_date_key", "amount_due", "amount_paid", "outstanding_amount"],
+      "non_empty_columns": ["amount_due", "amount_paid"],
       "hidden_columns": ["payment_key", "payment_id", "lease_id", "property_key", "tenant_key", "payment_date_key", "pipeline_run_id", "silver_processed_timestamp"]
     },
     "fact_maintenance_request": {
       "key": "maintenance_key",
       "required_columns": ["maintenance_key", "request_id", "property_key", "request_date_key", "completed_date_key", "status", "estimated_cost", "actual_cost", "cost_variance", "resolution_days"],
+      "non_empty_columns": ["estimated_cost", "resolution_days"],
       "hidden_columns": ["maintenance_key", "request_id", "property_key", "request_date_key", "completed_date_key", "pipeline_run_id", "silver_processed_timestamp"]
     },
     "fact_property_budget": {
       "key": "budget_key",
       "required_columns": ["budget_key", "property_key", "budget_date_key", "budget_year", "budget_month", "budget_revenue", "budget_expense", "budget_noi"],
+      "non_empty_columns": ["budget_revenue", "budget_expense"],
       "hidden_columns": ["budget_key", "property_key", "budget_date_key", "pipeline_run_id", "silver_processed_timestamp"]
     }
   },

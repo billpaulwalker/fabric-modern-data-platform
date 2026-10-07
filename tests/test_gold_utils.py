@@ -148,3 +148,34 @@ def test_model_validation_rejects_duplicate_grain():
     model = GoldModel("fact_test", pd.DataFrame([{"id": 1}, {"id": 1}]), ["id"])
     with pytest.raises(ValueError, match="declared grain"):
         validate_model(model)
+
+
+def test_rent_payment_resolves_keys_when_payment_already_carries_property_and_tenant():
+    properties = build_dim_property(pd.DataFrame([{"property_id": 101}]))
+    tenants = build_dim_tenant(pd.DataFrame([{"tenant_id": 201}]))
+    leases = pd.DataFrame([{"lease_id": 301, "property_id": 101, "tenant_id": 201}])
+    payments = pd.DataFrame([{
+        "payment_id": 401, "lease_id": 301, "property_id": 101, "tenant_id": 201,
+        "amount_due": 100, "amount_paid": 100,
+    }])
+    fact = build_fact_rent_payment(payments, leases, properties.frame, tenants.frame).frame
+    assert fact.loc[0, "property_key"] != UNKNOWN_KEY
+    assert fact.loc[0, "tenant_key"] != UNKNOWN_KEY
+
+
+def test_rent_payment_falls_back_to_lease_when_payment_property_is_null():
+    properties = build_dim_property(pd.DataFrame([{"property_id": 101}]))
+    tenants = build_dim_tenant(pd.DataFrame([{"tenant_id": 201}]))
+    leases = pd.DataFrame([{"lease_id": 301, "property_id": 101, "tenant_id": 201}])
+    payments = pd.DataFrame([{"payment_id": 401, "lease_id": 301, "property_id": None, "tenant_id": 201}])
+    fact = build_fact_rent_payment(payments, leases, properties.frame, tenants.frame).frame
+    expected = properties.frame.loc[properties.frame["property_id"] == 101, "property_key"].iloc[0]
+    assert fact.loc[0, "property_key"] == expected
+
+
+def test_maintenance_without_actual_cost_source_reports_null_not_zero():
+    properties = build_dim_property(pd.DataFrame([{"property_id": 101}]))
+    requests = pd.DataFrame([{"request_id": 501, "property_id": 101, "estimated_cost": 1250.0}])
+    fact = build_fact_maintenance(requests, properties.frame).frame
+    assert pd.isna(fact.loc[0, "actual_cost"])
+    assert pd.isna(fact.loc[0, "cost_variance"])

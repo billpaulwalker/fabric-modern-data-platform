@@ -53,6 +53,14 @@ def test_release_structure_and_package(tmp_path):
         assert "release-manifest.json" in archive.namelist()
 
 
+def _write_silver_metrics(root, missing_columns):
+    (root / "data/silver").mkdir(parents=True, exist_ok=True)
+    (root / "data/silver/silver_run_metrics.json").write_text(
+        json.dumps([{"table": "leases", "rows_valid": 6, "missing_configured_columns": missing_columns}]),
+        encoding="utf-8",
+    )
+
+
 def test_deployment_gates_require_successful_current_evidence(tmp_path):
     (tmp_path / "data/operations").mkdir(parents=True)
     (tmp_path / "data/gold").mkdir(parents=True)
@@ -67,9 +75,10 @@ def test_deployment_gates_require_successful_current_evidence(tmp_path):
         json.dumps([{"model": "fact_test", "rows_written": 10, "duplicate_grain_rows": 0}]),
         encoding="utf-8",
     )
+    _write_silver_metrics(tmp_path, [])
     report = evaluate_deployment_gates(tmp_path, "test")
     assert report.passed
-    assert len(report.checks) == 3
+    assert len(report.checks) == 4
 
 
 def test_deployment_gate_fails_when_semantic_validation_failed(tmp_path):
@@ -87,3 +96,16 @@ def test_deployment_gate_fails_when_semantic_validation_failed(tmp_path):
     report = evaluate_deployment_gates(tmp_path, "prod")
     assert not report.passed
     assert "Semantic-model validation evidence is missing or failed" in report.issues
+
+
+def test_deployment_gate_fails_when_silver_config_references_absent_source_columns(tmp_path):
+    _write_silver_metrics(tmp_path, ["monthly_rent"])
+    report = evaluate_deployment_gates(tmp_path, "dev")
+    assert not report.passed
+    assert any("monthly_rent" in issue for issue in report.issues)
+
+
+def test_deployment_gate_fails_when_silver_evidence_is_missing(tmp_path):
+    report = evaluate_deployment_gates(tmp_path, "dev")
+    assert "silver_configured_columns_present" in report.checks
+    assert any("Silver run metrics" in issue for issue in report.issues)

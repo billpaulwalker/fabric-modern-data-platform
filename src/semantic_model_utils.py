@@ -71,7 +71,15 @@ def validate_semantic_model(
         if key in frame.columns:
             report.check(frame[key].notna().all(), f"{table_name}.{key} contains null values")
             report.check(frame[key].is_unique, f"{table_name}.{key} is not unique")
+        for column in table_config.get("non_empty_columns", []):
+            values = pd.to_numeric(frame[column], errors="coerce") if column in frame.columns else pd.Series(dtype=float)
+            report.check(
+                bool(values.fillna(0).ne(0).any()),
+                f"{table_name}.{column} has no non-zero values; check the source-to-model column mapping",
+            )
 
+    unknown_key = config.get("unknown_member_key", 0)
+    max_unknown_ratio = float(config.get("max_unknown_member_ratio", 0.0))
     for relationship in config["relationships"]:
         one_table = relationship["from_table"]
         many_table = relationship["to_table"]
@@ -86,6 +94,21 @@ def validate_semantic_model(
         many_values = set(frames[many_table][many_column].dropna().tolist())
         orphans = sorted(many_values - one_values)
         report.check(not orphans, f"Relationship {relationship['name']} has orphan keys: {orphans[:10]}")
+
+        many_keys = frames[many_table][many_column]
+        if relationship.get("active", True):
+            null_count = int(many_keys.isna().sum())
+            report.check(
+                null_count == 0,
+                f"Relationship {relationship['name']} has {null_count} null foreign keys in {many_table}.{many_column}",
+            )
+        if unknown_key in one_values and len(many_keys):
+            unknown_ratio = float(many_keys.eq(unknown_key).mean())
+            report.check(
+                unknown_ratio <= max_unknown_ratio,
+                f"Relationship {relationship['name']}: {unknown_ratio:.1%} of {many_table} rows resolve to the "
+                f"Unknown member (limit {max_unknown_ratio:.1%})",
+            )
 
     measures_file = Path(measures_path)
     report.check(measures_file.exists(), f"Missing DAX measures file: {measures_file.name}")
