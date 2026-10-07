@@ -1,4 +1,5 @@
 {
+  "lakehouse_binding_note": "Lakehouse names are identical in every stage (config/fabric_layout.json); each rule binds the item to the lakehouse of that name in the stage's own workspace.",
   "rules": [
     {
       "artifact": "pl_cre_end_to_end",
@@ -8,18 +9,39 @@
       "prod": "prod"
     },
     {
-      "artifact": "pl_cre_end_to_end",
+      "artifact": "01_bronze_ingestion",
       "property": "default_lakehouse",
-      "dev": "lh_cre_dev",
-      "test": "lh_cre_test",
-      "prod": "lh_cre_prod"
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze"
+    },
+    {
+      "artifact": "04_silver_transformations",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_silver",
+      "test": "ws-cre-modernization-test/lh_cre_silver",
+      "prod": "ws-cre-modernization-prod/lh_cre_silver"
+    },
+    {
+      "artifact": "05_gold_dimensional_model",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_gold",
+      "test": "ws-cre-modernization-test/lh_cre_gold",
+      "prod": "ws-cre-modernization-prod/lh_cre_gold"
+    },
+    {
+      "artifact": "06_validate_semantic_model",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_gold",
+      "test": "ws-cre-modernization-test/lh_cre_gold",
+      "prod": "ws-cre-modernization-prod/lh_cre_gold"
     },
     {
       "artifact": "CRE Portfolio Analytics",
       "property": "gold_lakehouse_binding",
-      "dev": "lh_cre_dev",
-      "test": "lh_cre_test",
-      "prod": "lh_cre_prod"
+      "dev": "ws-cre-modernization-dev/lh_cre_gold",
+      "test": "ws-cre-modernization-test/lh_cre_gold",
+      "prod": "ws-cre-modernization-prod/lh_cre_gold"
     },
     {
       "artifact": "pl_cre_end_to_end",

@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
@@ -161,3 +162,24 @@ def test_secret_scan_covers_data_folder_and_key_formats(tmp_path):
     assert find_secret_files(tmp_path) == [
         "config/cert.pfx", "data/api_sample/credentials.json", "keys/client.p12", "keys/server.pem",
     ]
+
+
+def test_environment_config_does_not_require_lakehouse_names():
+    # Lakehouse names are environment-independent and live in config/fabric_layout.json.
+    config = {
+        "environment": "dev",
+        "workspace_name": "ws-dev",
+        "semantic_model_name": "Model - Dev",
+        "deployment_stage": "Development",
+        "schedule_enabled": False,
+        "data_validation_required": True,
+    }
+    assert validate_environment_config(config, "dev") == []
+
+
+def test_repository_environment_configs_are_valid():
+    root = Path(__file__).resolve().parents[1]
+    for environment in ["dev", "test", "prod"]:
+        config = json.loads((root / f"config/environments/{environment}.json").read_text(encoding="utf-8"))
+        assert validate_environment_config(config, environment) == []
+        assert "lakehouse_name" not in config

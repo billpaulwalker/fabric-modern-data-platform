@@ -1,0 +1,39 @@
+{
+  "lakehouses": {
+    "bronze": "lh_cre_bronze",
+    "silver": "lh_cre_silver",
+    "gold": "lh_cre_gold"
+  },
+  "tables": {
+    "bronze": {
+      "properties": "cre_sql.properties",
+      "tenants": "cre_sql.tenants",
+      "leases": "cre_sql.leases",
+      "rent_payments": "cre_sql.rent_payments",
+      "maintenance_requests": "cre_sql.maintenance_requests",
+      "property_budget": "business_files.property_budget",
+      "property_region_mapping": "business_files.property_region_mapping",
+      "weather_api_raw": "openweather.weather_raw"
+    },
+    "silver": {
+      "properties": "property.properties",
+      "property_region_mapping": "property.property_region_mapping",
+      "tenants": "leasing.tenants",
+      "leases": "leasing.leases",
+      "rent_payments": "leasing.rent_payments",
+      "property_budget": "finance.property_budget",
+      "maintenance_requests": "operations.maintenance_requests",
+      "weather_api_raw": "environment.weather_observations",
+      "rejected_records": "quarantine.rejected_records"
+    },
+    "gold": {
+      "dim_property": "shared.dim_property",
+      "dim_tenant": "shared.dim_tenant",
+      "dim_date": "shared.dim_date",
+      "fact_lease": "leasing.fact_lease",
+      "fact_rent_payment": "leasing.fact_rent_payment",
+      "fact_property_budget": "finance.fact_property_budget",
+      "fact_maintenance_request": "operations.fact_maintenance_request"
+    }
+  }
+}

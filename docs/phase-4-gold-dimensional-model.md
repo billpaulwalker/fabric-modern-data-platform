@@ -52,16 +52,13 @@ Review `data/gold/gold_model_metrics.json` and the generated model CSV files. Th
 
 ## Fabric Execution
 
-1. Confirm all required `silver` Delta tables exist.
-2. Upload `config/gold_model_config.json` to the Lakehouse at `Files/config/`.
-3. Create a notebook from `notebooks/fabric/05_gold_dimensional_model_pyspark.py`.
-4. Attach the schema-enabled Lakehouse.
-5. Run all cells and confirm the `gold` schema tables. The notebook checks every model's grain before writing.
-6. Execute `sql/gold_acceptance_queries.sql` through the SQL analytics endpoint.
-7. Compare fact counts to their corresponding Silver sources.
-8. Review unknown-member usage and resolve unexpected source-key gaps.
-
-For a Lakehouse without schema support, replace `gold.<table>` with names such as `gold_dim_property`.
+1. Confirm the required Silver tables exist in `lh_cre_silver`.
+2. Upload `config/fabric_layout.json` and `config/gold_model_config.json` to `lh_cre_gold` at `Files/config/`.
+3. Create a notebook from `notebooks/fabric/05_gold_dimensional_model_pyspark.py` with `lh_cre_gold` as its default Lakehouse.
+4. Run all cells. Conformed dimensions land in the `shared` schema and facts in `leasing`, `finance`, and `operations`. The notebook checks every model's grain before writing.
+5. Execute `sql/gold_acceptance_queries.sql` in the `lh_cre_gold` SQL analytics endpoint.
+6. Compare fact counts to their corresponding Silver sources.
+7. Review unknown-member usage and resolve unexpected source-key gaps.
 
 ## Completion Checkpoint
 

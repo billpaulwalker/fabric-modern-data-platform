@@ -1,7 +1,7 @@
 # Fabric notebook source
-# Attach the schema-enabled project Lakehouse before running this notebook.
-# Upload config/bronze_source_config.json to Files/config/ and the repository's
-# data/sample and data/api_sample folders to Files/landing/ first.
+# Default Lakehouse: lh_cre_bronze (schema-enabled). Writes one schema per source system.
+# Upload config/fabric_layout.json and config/bronze_source_config.json to its Files/config/,
+# and the repository's data/sample and data/api_sample folders to its Files/landing/.
 # Bronze keeps source values raw: CSV columns stay strings and API JSON stays nested.
 
 from datetime import datetime, timezone
@@ -22,6 +22,22 @@ AUDIT_COLUMNS = [
 def load_config(path) -> dict:
     with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def resolve_table(layout: dict, layer: str, name: str) -> str:
+    """Return lakehouse.schema.table for a logical table, as declared in fabric_layout.json."""
+    location = layout["tables"].get(layer, {}).get(name)
+    if location is None:
+        raise ValueError(f"{layer} table {name!r} is not declared in fabric_layout.json")
+    return f"{layout['lakehouses'][layer]}.{location}"
+
+
+def create_schema_for(spark, table_name: str) -> None:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {table_name.rsplit('.', 1)[0]}")
+
+
+def write_table(frame: DataFrame, table_name: str) -> None:
+    frame.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(table_name)
 
 
 def new_pipeline_run_id(started_at: datetime) -> str:
@@ -75,6 +91,7 @@ def ingest_source(spark, source: dict, landing_root: str, pipeline_run_id: str, 
 
 def main(spark, pipeline_run_id=None, config_directory: str = CONFIG_DIRECTORY, landing_root=None) -> list:
     config = load_config(f"{config_directory}/bronze_source_config.json")
+    layout = load_config(f"{config_directory}/fabric_layout.json")
     started_at = datetime.now(timezone.utc)
     run_id = pipeline_run_id or new_pipeline_run_id(started_at)
     root = landing_root or config["landing_root"]
@@ -85,12 +102,12 @@ def main(spark, pipeline_run_id=None, config_directory: str = CONFIG_DIRECTORY, 
         for source in config["sources"]
     }
 
-    spark.sql("CREATE SCHEMA IF NOT EXISTS bronze")
     metrics = []
     for source in config["sources"]:
-        table = f"bronze.{source['name']}"
+        table = resolve_table(layout, "bronze", source["name"])
+        create_schema_for(spark, table)
         # Every source is a full load: the table is replaced on each run.
-        frames[source["name"]].write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(table)
+        write_table(frames[source["name"]], table)
         metrics.append({"table": table, "rows_written": spark.table(table).count(), "pipeline_run_id": run_id})
     return metrics
 

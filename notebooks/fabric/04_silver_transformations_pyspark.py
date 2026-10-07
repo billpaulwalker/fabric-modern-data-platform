@@ -1,7 +1,7 @@
 # Fabric notebook source
-# Attach the project Lakehouse before running this notebook.
-# Upload config/silver_table_config.json to the Lakehouse at Files/config/ first;
-# it is the same contract the local pandas pipeline uses.
+# Default Lakehouse: lh_cre_silver (schema-enabled). Reads lh_cre_bronze; writes one schema per domain.
+# Upload config/fabric_layout.json and config/silver_table_config.json to its Files/config/;
+# the table config is the same contract the local pandas pipeline uses.
 
 from functools import reduce
 import json
@@ -27,6 +27,22 @@ SPARK_TYPES = {
 def load_config(path) -> dict:
     with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def resolve_table(layout: dict, layer: str, name: str) -> str:
+    """Return lakehouse.schema.table for a logical table, as declared in fabric_layout.json."""
+    location = layout["tables"].get(layer, {}).get(name)
+    if location is None:
+        raise ValueError(f"{layer} table {name!r} is not declared in fabric_layout.json")
+    return f"{layout['lakehouses'][layer]}.{location}"
+
+
+def create_schema_for(spark, table_name: str) -> None:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {table_name.rsplit('.', 1)[0]}")
+
+
+def write_table(frame: DataFrame, table_name: str) -> None:
+    frame.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(table_name)
 
 
 def snake_case(name: str) -> str:
@@ -213,7 +229,10 @@ def transform_table(frame: DataFrame, config: dict) -> tuple:
 
 def main(spark, config_directory: str = CONFIG_DIRECTORY) -> list:
     configs = load_config(f"{config_directory}/silver_table_config.json")["tables"]
-    results = [transform_table(spark.table(f"bronze.{config['name']}"), config) for config in configs]
+    layout = load_config(f"{config_directory}/fabric_layout.json")
+    results = [
+        transform_table(spark.table(resolve_table(layout, "bronze", config["name"])), config) for config in configs
+    ]
 
     # Fail before writing anything if the source no longer matches the contract.
     gaps = {metrics["table"]: metrics["missing_configured_columns"] for _, _, metrics in results
@@ -221,18 +240,16 @@ def main(spark, config_directory: str = CONFIG_DIRECTORY) -> list:
     if gaps:
         raise ValueError(f"Configured columns are absent from Bronze; update column_mappings: {gaps}")
 
-    spark.sql("CREATE SCHEMA IF NOT EXISTS silver")
-    spark.sql("CREATE SCHEMA IF NOT EXISTS silver_quarantine")
     for valid, _, metrics in results:
-        valid.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(
-            f"silver.{metrics['table']}"
-        )
+        table = resolve_table(layout, "silver", metrics["table"])
+        create_schema_for(spark, table)
+        write_table(valid, table)
     rejected_union = reduce(
         lambda left, right: left.unionByName(right, allowMissingColumns=True), [rejected for _, rejected, _ in results]
     )
-    rejected_union.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(
-        "silver_quarantine.rejected_records"
-    )
+    quarantine = resolve_table(layout, "silver", "rejected_records")
+    create_schema_for(spark, quarantine)
+    write_table(rejected_union, quarantine)
     return [metrics for _, _, metrics in results]
 
 

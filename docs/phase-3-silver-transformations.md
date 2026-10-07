@@ -23,7 +23,7 @@ Each table follows the same order:
 | Runtime | Valid output | Rejected output |
 |---|---|---|
 | Local/CI | `data/silver/silver_<table>.csv` | `data/rejected/silver_<table>_rejected.csv` |
-| Fabric | `silver.<table>` Delta table | `silver_quarantine.rejected_records` Delta table |
+| Fabric | `lh_cre_silver.<domain>.<table>` Delta table | `lh_cre_silver.quarantine.rejected_records` Delta table |
 
 Local CSV outputs are development analogs. The Fabric PySpark notebook is the production-shaped implementation and writes managed Delta tables.
 
@@ -64,17 +64,15 @@ rows_read = rows_valid + rows_rejected + duplicate_rows_removed
 
 ## Fabric Execution
 
-1. Create or attach a schema-enabled Lakehouse.
-2. Ensure Phase 2 data exists as `bronze.<table>` Delta tables.
-3. Upload `config/silver_table_config.json` to the Lakehouse at `Files/config/`. The notebook reads the same contract, including `column_mappings` and `derived_columns`, as the local pipeline, and fails before writing if a configured column is absent from Bronze.
-4. Create a Fabric notebook from `notebooks/fabric/04_silver_transformations_pyspark.py`.
-5. Attach the Lakehouse to the notebook.
-6. Run all cells.
-7. Confirm Delta tables in the `silver` schema.
-8. Review `silver_quarantine.rejected_records`.
-9. Run `sql/silver_acceptance_queries.sql` through the SQL analytics endpoint.
+1. Ensure Phase 2 data exists in `lh_cre_bronze`.
+2. Upload `config/fabric_layout.json` and `config/silver_table_config.json` to `lh_cre_silver` at `Files/config/`. The notebook reads the same contract, including `column_mappings` and `derived_columns`, as the local pipeline, and fails before writing if a configured column is absent from Bronze.
+3. Create a Fabric notebook from `notebooks/fabric/04_silver_transformations_pyspark.py` with `lh_cre_silver` as its default Lakehouse.
+4. Run all cells. The notebook reads Bronze tables from `lh_cre_bronze` by their full names.
+5. Confirm Delta tables in the `property`, `leasing`, `finance`, `operations`, and `environment` schemas.
+6. Review `quarantine.rejected_records`.
+7. Run `sql/silver_acceptance_queries.sql` in the `lh_cre_silver` SQL analytics endpoint.
 
-If the Lakehouse does not support schemas, use table prefixes such as `silver_leases` and `silver_quarantine_rejected_records` instead.
+The full layout and setup steps are in `docs/fabric-getting-started.md`.
 
 ## Design Decisions
 

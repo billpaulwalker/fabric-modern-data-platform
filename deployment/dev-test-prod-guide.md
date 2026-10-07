@@ -2,11 +2,13 @@
 
 ## Workspace Topology
 
-| Stage | Workspace | Lakehouse | Schedule |
+| Stage | Workspace | Lakehouses | Schedule |
 |---|---|---|---|
-| Development | `ws-cre-modernization-dev` | `lh_cre_dev` | Disabled |
-| Test | `ws-cre-modernization-test` | `lh_cre_test` | Disabled |
-| Production | `ws-cre-modernization-prod` | `lh_cre_prod` | Enabled after validation |
+| Development | `ws-cre-modernization-dev` | `lh_cre_bronze`, `lh_cre_silver`, `lh_cre_gold` | Disabled |
+| Test | `ws-cre-modernization-test` | `lh_cre_bronze`, `lh_cre_silver`, `lh_cre_gold` | Disabled |
+| Production | `ws-cre-modernization-prod` | `lh_cre_bronze`, `lh_cre_silver`, `lh_cre_gold` | Enabled after validation |
+
+Lakehouse names are identical in every stage; the workspace carries the environment.
 
 Create one Fabric deployment pipeline with Development, Test, and Production stages mapped to these workspaces. Connect only the Development workspace to the Git repository.
 
@@ -48,7 +50,7 @@ Confirm pipeline success, Gold reconciliation, semantic validation, model relati
 2. Trigger the release workflow for `prod` using the same tested version.
 3. Approve the protected `fabric-prod` environment.
 4. Compare Test and Production in the Fabric deployment pipeline.
-5. Apply Production connection and Lakehouse binding rules.
+5. Apply Production connection and Lakehouse binding rules, so each notebook and the semantic model bind to the Lakehouses in the Production workspace.
 6. Promote only the tested artifact set from Test to Production.
 7. Keep the Production schedule disabled until smoke tests pass.
 8. Run post-deployment validation.

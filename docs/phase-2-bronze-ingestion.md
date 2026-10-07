@@ -93,7 +93,7 @@ Update watermark where applicable
 
 ## Fabric Execution
 
-`notebooks/fabric/01_bronze_ingestion_pyspark.py` lands every source listed in `config/bronze_source_config.json` from the Lakehouse `Files/landing/` folder into `bronze.<table>` Delta tables with the same audit columns. CSV values stay strings and API JSON stays nested; Silver handles typing and flattening. Every source is currently a full load, replaced on each run; watermark-based incremental loading is a planned extension.
+`notebooks/fabric/01_bronze_ingestion_pyspark.py` lands every source listed in `config/bronze_source_config.json` from the `lh_cre_bronze` `Files/landing/` folder into Delta tables in that Lakehouse, one schema per source system (`cre_sql`, `business_files`, `openweather`, as declared in `config/fabric_layout.json`), with the same audit columns. CSV values stay strings and API JSON stays nested; Silver handles typing and flattening. Every source is currently a full load, replaced on each run; watermark-based incremental loading is a planned extension.
 
 Setup, upload paths, and expected row counts are in `docs/fabric-getting-started.md`.
 

@@ -37,7 +37,7 @@ def sha256_file(path: str | Path) -> str:
 
 def validate_environment_config(config: dict[str, Any], expected_environment: str) -> list[str]:
     required = {
-        "environment", "workspace_name", "lakehouse_name", "semantic_model_name",
+        "environment", "workspace_name", "semantic_model_name",
         "deployment_stage", "schedule_enabled", "data_validation_required",
     }
     issues = []

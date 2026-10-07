@@ -1,6 +1,7 @@
 # Fabric notebook source
-# Attach the schema-enabled project Lakehouse before running all cells.
-# Upload config/gold_model_config.json to the Lakehouse at Files/config/ first.
+# Default Lakehouse: lh_cre_gold (schema-enabled). Reads lh_cre_silver; writes conformed
+# dimensions to the shared schema and facts to their domain schemas.
+# Upload config/fabric_layout.json and config/gold_model_config.json to its Files/config/.
 
 from functools import reduce
 import json
@@ -25,6 +26,22 @@ GRAINS = {
 def load_config(path) -> dict:
     with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def resolve_table(layout: dict, layer: str, name: str) -> str:
+    """Return lakehouse.schema.table for a logical table, as declared in fabric_layout.json."""
+    location = layout["tables"].get(layer, {}).get(name)
+    if location is None:
+        raise ValueError(f"{layer} table {name!r} is not declared in fabric_layout.json")
+    return f"{layout['lakehouses'][layer]}.{location}"
+
+
+def create_schema_for(spark, table_name: str) -> None:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {table_name.rsplit('.', 1)[0]}")
+
+
+def write_table(frame: DataFrame, table_name: str) -> None:
+    frame.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(table_name)
 
 
 def existing(frame: DataFrame, columns: list) -> list:
@@ -305,17 +322,20 @@ def build_models(spark, silver: dict, gold_config: dict) -> dict:
 
 def main(spark, config_directory: str = CONFIG_DIRECTORY) -> list:
     gold_config = load_config(f"{config_directory}/gold_model_config.json")
+    layout = load_config(f"{config_directory}/fabric_layout.json")
     sources = ["properties", "property_region_mapping", "tenants", "leases", "rent_payments",
                "maintenance_requests", "property_budget"]
-    models = build_models(spark, {name: spark.table(f"silver.{name}") for name in sources}, gold_config)
+    silver = {name: spark.table(resolve_table(layout, "silver", name)) for name in sources}
+    models = build_models(spark, silver, gold_config)
     for name, frame in models.items():
         assert_unique_grain(name, frame, GRAINS[name])
 
-    spark.sql("CREATE SCHEMA IF NOT EXISTS gold")
     metrics = []
     for name, frame in models.items():
-        frame.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"gold.{name}")
-        metrics.append({"model": name, "rows_written": spark.table(f"gold.{name}").count()})
+        table = resolve_table(layout, "gold", name)
+        create_schema_for(spark, table)
+        write_table(frame, table)
+        metrics.append({"model": name, "table": table, "rows_written": spark.table(table).count()})
     return metrics
 
 

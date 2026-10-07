@@ -13,13 +13,13 @@ The validation must pass before model creation. It checks Gold schemas, unique k
 
 ## 2. Create the Direct Lake Model
 
-1. Open the Fabric workspace containing the project Lakehouse.
-2. Create a new semantic model from the Lakehouse.
+1. Open the environment's workspace and run `06_validate_semantic_model` there; it must pass.
+2. Create a new semantic model from the `lh_cre_gold` Lakehouse.
 3. Name it **CRE Portfolio Analytics**.
-4. Select only the seven `gold` tables in `config/semantic_model_config.json`.
+4. Select only the seven tables in `config/semantic_model_config.json`: `dim_property`, `dim_tenant`, and `dim_date` from the `shared` schema, and the facts from `leasing`, `finance`, and `operations` (see `config/fabric_layout.json`).
 5. Confirm the model uses Direct Lake storage mode.
 
-Do not expose Bronze or Silver tables to report authors.
+Do not expose Bronze or Silver tables to report authors. Because they live in `lh_cre_bronze` and `lh_cre_silver`, they never appear in the Gold Lakehouse the model binds to.
 
 ## 3. Configure Relationships
 

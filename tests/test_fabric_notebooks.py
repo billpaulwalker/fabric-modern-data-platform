@@ -293,19 +293,119 @@ def test_gold_duplicate_grain_is_rejected(csv_frame):
 # Sample data, end to end --------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def sample_gold(spark):
-    # The full Fabric chain: landing files -> Bronze -> Silver -> Gold.
-    bronze = {
-        source["name"]: bronze_nb.ingest_source(spark, source, LANDING_ROOT, "test_run", "2026-06-20T00:00:00Z")
-        for source in bronze_nb.load_config(BRONZE_CONFIG_PATH)["sources"]
+def fabric_run(spark):
+    """Run every notebook's main() in order against an in-memory catalog.
+
+    Each notebook reads only what the previous one wrote, by the qualified names it
+    resolves from fabric_layout.json, so a naming mismatch between layers fails here.
+    """
+    catalog = FakeCatalogSpark(spark)
+    notebooks = [bronze_nb, silver_nb, gold_nb]  # semantic validation only reads
+    originals = [notebook.write_table for notebook in notebooks]
+    for notebook in notebooks:
+        notebook.write_table = catalog.write_table
+    try:
+        config_directory = str(REPO_ROOT / "config")
+        bronze_nb.main(catalog, pipeline_run_id="test_run", config_directory=config_directory, landing_root=LANDING_ROOT)
+        silver_metrics = silver_nb.main(catalog, config_directory=config_directory)
+        gold_nb.main(catalog, config_directory=config_directory)
+        semantic_report = semantic_nb.main(catalog, config_directory=config_directory)
+    finally:
+        for notebook, original in zip(notebooks, originals):
+            notebook.write_table = original
+    return {
+        "tables": catalog.tables,
+        "schemas": catalog.created_schemas,
+        "silver_metrics": silver_metrics,
+        "semantic_report": semantic_report,
     }
-    silver, metrics = {}, []
-    for config in silver_nb.load_config(REPO_ROOT / "config/silver_table_config.json")["tables"]:
-        valid, _, table_metrics = silver_nb.transform_table(bronze[config["name"]], config)
-        silver[config["name"]] = valid.cache()
-        metrics.append(table_metrics)
-    gold_config = silver_nb.load_config(REPO_ROOT / "config/gold_model_config.json")
-    return metrics, gold_nb.build_models(spark, silver, gold_config)
+
+
+class FakeCatalogSpark:
+    """Stands in for Fabric's lakehouse catalog; everything else goes to the real session."""
+
+    def __init__(self, spark):
+        self._spark = spark
+        self.tables = {}
+        self.created_schemas = set()
+        self.catalog = self
+
+    def write_table(self, frame, table_name):
+        lakehouse_schema = table_name.rsplit(".", 1)[0]
+        assert lakehouse_schema in self.created_schemas, f"{table_name} written before its schema was created"
+        self.tables[table_name] = frame.cache()
+
+    def table(self, table_name):
+        if table_name not in self.tables:
+            raise AssertionError(f"Read of {table_name}, which no earlier notebook wrote")
+        return self.tables[table_name]
+
+    def tableExists(self, table_name):  # noqa: N802 - mirrors spark.catalog.tableExists
+        return table_name in self.tables
+
+    def sql(self, statement):
+        prefix = "CREATE SCHEMA IF NOT EXISTS "
+        if statement.startswith(prefix):
+            self.created_schemas.add(statement[len(prefix):].strip())
+            return None
+        return self._spark.sql(statement)
+
+    def __getattr__(self, name):
+        return getattr(self._spark, name)
+
+
+LAYOUT_PATH = REPO_ROOT / "config/fabric_layout.json"
+EXPECTED_TABLES = {
+    "lh_cre_bronze.cre_sql.properties", "lh_cre_bronze.cre_sql.tenants", "lh_cre_bronze.cre_sql.leases",
+    "lh_cre_bronze.cre_sql.rent_payments", "lh_cre_bronze.cre_sql.maintenance_requests",
+    "lh_cre_bronze.business_files.property_budget", "lh_cre_bronze.business_files.property_region_mapping",
+    "lh_cre_bronze.openweather.weather_raw",
+    "lh_cre_silver.property.properties", "lh_cre_silver.property.property_region_mapping",
+    "lh_cre_silver.leasing.tenants", "lh_cre_silver.leasing.leases", "lh_cre_silver.leasing.rent_payments",
+    "lh_cre_silver.finance.property_budget", "lh_cre_silver.operations.maintenance_requests",
+    "lh_cre_silver.environment.weather_observations", "lh_cre_silver.quarantine.rejected_records",
+    "lh_cre_gold.shared.dim_property", "lh_cre_gold.shared.dim_tenant", "lh_cre_gold.shared.dim_date",
+    "lh_cre_gold.leasing.fact_lease", "lh_cre_gold.leasing.fact_rent_payment",
+    "lh_cre_gold.finance.fact_property_budget", "lh_cre_gold.operations.fact_maintenance_request",
+}
+
+
+def test_notebooks_write_the_agreed_lakehouse_layout(fabric_run):
+    assert set(fabric_run["tables"]) == EXPECTED_TABLES
+
+
+def test_each_notebook_writes_only_to_its_own_lakehouse(fabric_run):
+    for table_name in fabric_run["tables"]:
+        lakehouse = table_name.split(".")[0]
+        assert lakehouse in {"lh_cre_bronze", "lh_cre_silver", "lh_cre_gold"}
+    assert fabric_run["semantic_report"]["passed"]
+
+
+@pytest.mark.parametrize("notebook", [bronze_nb, silver_nb, gold_nb, semantic_nb], ids=lambda n: n.__name__)
+def test_every_notebook_resolves_names_identically(notebook):
+    layout = bronze_nb.load_config(LAYOUT_PATH)
+    assert notebook.resolve_table(layout, "silver", "rent_payments") == "lh_cre_silver.leasing.rent_payments"
+    assert notebook.resolve_table(layout, "bronze", "weather_api_raw") == "lh_cre_bronze.openweather.weather_raw"
+    assert notebook.resolve_table(layout, "gold", "dim_tenant") == "lh_cre_gold.shared.dim_tenant"
+    with pytest.raises(ValueError, match="fabric_layout.json"):
+        notebook.resolve_table(layout, "gold", "fact_unknown")
+
+
+def test_layout_covers_every_configured_table():
+    layout = bronze_nb.load_config(LAYOUT_PATH)["tables"]
+    bronze = {source["name"] for source in bronze_nb.load_config(BRONZE_CONFIG_PATH)["sources"]}
+    silver = {table["name"] for table in silver_nb.load_config(REPO_ROOT / "config/silver_table_config.json")["tables"]}
+    semantic = set(semantic_nb.load_config(REPO_ROOT / "config/semantic_model_config.json")["tables"])
+    assert set(layout["bronze"]) == bronze
+    assert set(layout["silver"]) == silver | {"rejected_records"}
+    assert set(layout["gold"]) == set(gold_nb.GRAINS) == semantic
+
+
+@pytest.fixture(scope="module")
+def sample_gold(fabric_run):
+    layout = gold_nb.load_config(LAYOUT_PATH)
+    models = {name: fabric_run["tables"][gold_nb.resolve_table(layout, "gold", name)] for name in gold_nb.GRAINS}
+    return fabric_run["silver_metrics"], models
 
 
 def test_sample_silver_has_no_rejections_or_missing_columns(sample_gold):

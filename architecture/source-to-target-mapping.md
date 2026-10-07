@@ -2,22 +2,23 @@
 
 Column renames and calculations live in `config/silver_table_config.json` (`column_mappings`, `derived_columns`) and are applied identically by the local pandas pipeline and the Fabric PySpark notebook. Gold-only logic lives in `src/gold_utils.py` and `notebooks/fabric/05_gold_dimensional_model_pyspark.py`.
 
-Table names below use the Fabric schemas. Local runs write the same tables as CSV files, for example `data/bronze/bronze_leases.csv` and `data/silver/silver_leases.csv`.
+Fabric table locations are declared in `config/fabric_layout.json`: Bronze tables in `lh_cre_bronze` by source system, Silver tables in `lh_cre_silver` by business domain, and Gold tables in `lh_cre_gold` with conformed dimensions in `shared` and facts by domain. Local runs write the same data as flat CSV files, for example `data/bronze/bronze_leases.csv` and `data/silver/silver_leases.csv`.
 
 ## Table Mapping
 
-| Source Object | Source Type | Bronze Table | Silver Table | Gold Object |
+| Source Object | Source Type | Bronze (`lh_cre_bronze`) | Silver (`lh_cre_silver`) | Gold (`lh_cre_gold`) |
 |---|---|---|---|---|
-| properties | SQL / CSV | bronze.properties | silver.properties | dim_property |
-| property_region_mapping | CSV | bronze.property_region_mapping | silver.property_region_mapping | dim_property (region, market) |
-| tenants | SQL / CSV | bronze.tenants | silver.tenants | dim_tenant |
-| leases | SQL / CSV | bronze.leases | silver.leases | fact_lease |
-| rent_payments | SQL / CSV | bronze.rent_payments | silver.rent_payments | fact_rent_payment |
-| maintenance_requests | SQL / CSV | bronze.maintenance_requests | silver.maintenance_requests | fact_maintenance_request |
-| property_budget | CSV | bronze.property_budget | silver.property_budget | fact_property_budget |
-| weather | REST API | bronze.weather_api_raw | silver.weather_api_raw | Not modelled in Gold |
+| properties | SQL / CSV | cre_sql.properties | property.properties | shared.dim_property |
+| property_region_mapping | CSV | business_files.property_region_mapping | property.property_region_mapping | shared.dim_property (region, market) |
+| tenants | SQL / CSV | cre_sql.tenants | leasing.tenants | shared.dim_tenant |
+| leases | SQL / CSV | cre_sql.leases | leasing.leases | leasing.fact_lease |
+| rent_payments | SQL / CSV | cre_sql.rent_payments | leasing.rent_payments | leasing.fact_rent_payment |
+| maintenance_requests | SQL / CSV | cre_sql.maintenance_requests | operations.maintenance_requests | operations.fact_maintenance_request |
+| property_budget | CSV | business_files.property_budget | finance.property_budget | finance.fact_property_budget |
+| weather | REST API | openweather.weather_raw | environment.weather_observations | Not modelled in Gold |
+| — | — | — | — | shared.dim_date (generated) |
 
-Rejected rows from every Silver table land in `silver_quarantine.rejected_records` with a `rejection_reason`.
+Rejected rows from every Silver table land in `quarantine.rejected_records` in `lh_cre_silver`, with a `rejection_reason`.
 
 ## Column Mapping
 

@@ -20,7 +20,7 @@ The completed seven-phase project demonstrates:
 The repository contains two complementary implementations:
 
 1. **Local Python/pandas execution** for learning, unit testing, CI, and demonstration without requiring a Fabric capacity.
-2. **Fabric PySpark/Delta implementations and build specifications** for deployment into a schema-enabled Fabric Lakehouse.
+2. **Fabric PySpark/Delta implementations and build specifications** for deployment into three schema-enabled Fabric Lakehouses, one per medallion layer.
 
 ## Business Scenario
 
@@ -56,12 +56,14 @@ flowchart TD
 | Layer | Fabric implementation | Responsibility |
 |---|---|---|
 | Ingestion | Fabric notebooks and Data Pipeline | Read sources, coordinate activities, propagate run IDs |
-| Bronze | Managed Delta tables in `bronze` | Preserve raw records and ingestion lineage |
-| Silver | Managed Delta tables in `silver` | Standardize, validate, quarantine, and deduplicate |
-| Gold | Managed Delta tables in `gold` | Publish dimensions, facts, keys, and business measures |
+| Bronze | `lh_cre_bronze`, one schema per source system | Preserve raw records and ingestion lineage |
+| Silver | `lh_cre_silver`, one schema per business domain | Standardize, validate, quarantine, and deduplicate |
+| Gold | `lh_cre_gold`, conformed dimensions in `shared` and facts by domain | Publish dimensions, facts, keys, and business measures |
 | Semantic | Power BI Direct Lake semantic model | Relationships, DAX, formatting, and governed consumption |
 | Operations | Pipeline logs, metrics, health report, runbooks | Monitoring, diagnosis, recovery, and audit evidence |
 | Delivery | GitHub Actions or Azure DevOps plus Fabric deployment pipelines | Validate, approve, package, promote, and roll back |
+
+Every Fabric table location is declared once in `config/fabric_layout.json`; the reasoning for separate Lakehouses per layer is in `architecture/architecture-overview.md`.
 
 ## Technologies
 
@@ -128,7 +130,7 @@ Silver applies configuration-driven processing:
 - Latest-record-wins deduplication using complete business keys
 - Bronze lineage preservation
 
-Valid local outputs are written to `data/silver/`; rejected records are written to `data/rejected/`. The Fabric notebook writes Delta tables to `silver` and rejected data to `silver_quarantine.rejected_records`.
+Valid local outputs are written to `data/silver/`; rejected records are written to `data/rejected/`. The Fabric notebook writes Delta tables to domain schemas in `lh_cre_silver` and rejected data to `quarantine.rejected_records`.
 
 The monthly budget grain is explicitly defined as:
 
@@ -232,11 +234,13 @@ python -m pytest
 
 ## Dev/Test/Prod Delivery
 
-| Stage | Workspace | Lakehouse | Schedule |
+| Stage | Workspace | Lakehouses | Schedule |
 |---|---|---|---|
-| Development | `ws-cre-modernization-dev` | `lh_cre_dev` | Disabled |
-| Test | `ws-cre-modernization-test` | `lh_cre_test` | Disabled |
-| Production | `ws-cre-modernization-prod` | `lh_cre_prod` | Enabled after validation |
+| Development | `ws-cre-modernization-dev` | `lh_cre_bronze`, `lh_cre_silver`, `lh_cre_gold` | Disabled |
+| Test | `ws-cre-modernization-test` | `lh_cre_bronze`, `lh_cre_silver`, `lh_cre_gold` | Disabled |
+| Production | `ws-cre-modernization-prod` | `lh_cre_bronze`, `lh_cre_silver`, `lh_cre_gold` | Enabled after validation |
+
+Lakehouse names are identical in every stage; the workspace carries the environment.
 
 The delivery model uses:
 

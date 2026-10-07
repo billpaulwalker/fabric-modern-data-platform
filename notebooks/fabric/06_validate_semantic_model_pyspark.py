@@ -1,6 +1,6 @@
 # Fabric notebook source
-# Attach the schema-enabled project Lakehouse before running all cells.
-# Upload config/semantic_model_config.json to the Lakehouse at Files/config/ first.
+# Default Lakehouse: lh_cre_gold (schema-enabled). Reads the Gold tables only.
+# Upload config/fabric_layout.json and config/semantic_model_config.json to its Files/config/.
 # Run after the Gold notebook; a failure here should stop the semantic-model refresh.
 # DAX measure names are validated in repository CI, where the measures file lives.
 
@@ -16,6 +16,14 @@ CONFIG_DIRECTORY = "/lakehouse/default/Files/config"
 def load_config(path) -> dict:
     with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def resolve_table(layout: dict, layer: str, name: str) -> str:
+    """Return lakehouse.schema.table for a logical table, as declared in fabric_layout.json."""
+    location = layout["tables"].get(layer, {}).get(name)
+    if location is None:
+        raise ValueError(f"{layer} table {name!r} is not declared in fabric_layout.json")
+    return f"{layout['lakehouses'][layer]}.{location}"
 
 
 class ValidationReport:
@@ -109,10 +117,12 @@ def validate_gold_tables(tables: dict, config: dict) -> dict:
 
 def main(spark, config_directory: str = CONFIG_DIRECTORY) -> dict:
     config = load_config(f"{config_directory}/semantic_model_config.json")
+    layout = load_config(f"{config_directory}/fabric_layout.json")
+    table_names = {name: resolve_table(layout, "gold", name) for name in config["tables"]}
     tables = {
-        name: spark.table(f"gold.{name}")
-        for name in config["tables"]
-        if spark.catalog.tableExists(f"gold.{name}")
+        name: spark.table(table_name)
+        for name, table_name in table_names.items()
+        if spark.catalog.tableExists(table_name)
     }
     report = validate_gold_tables(tables, config)
     print(json.dumps(report, indent=2))
