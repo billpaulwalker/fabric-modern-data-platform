@@ -9,28 +9,28 @@
       "prod": "prod"
     },
     {
-      "artifact": "01_bronze_ingestion",
+      "artifact": "nb_cre_bronze_ingest",
       "property": "default_lakehouse",
       "dev": "ws-cre-modernization-dev/lh_cre_bronze",
       "test": "ws-cre-modernization-test/lh_cre_bronze",
       "prod": "ws-cre-modernization-prod/lh_cre_bronze"
     },
     {
-      "artifact": "04_silver_transformations",
+      "artifact": "nb_cre_silver_transform",
       "property": "default_lakehouse",
       "dev": "ws-cre-modernization-dev/lh_cre_silver",
       "test": "ws-cre-modernization-test/lh_cre_silver",
       "prod": "ws-cre-modernization-prod/lh_cre_silver"
     },
     {
-      "artifact": "05_gold_dimensional_model",
+      "artifact": "nb_cre_gold_build_model",
       "property": "default_lakehouse",
       "dev": "ws-cre-modernization-dev/lh_cre_gold",
       "test": "ws-cre-modernization-test/lh_cre_gold",
       "prod": "ws-cre-modernization-prod/lh_cre_gold"
     },
     {
-      "artifact": "06_validate_semantic_model",
+      "artifact": "nb_cre_gold_validate_model",
       "property": "default_lakehouse",
       "dev": "ws-cre-modernization-dev/lh_cre_gold",
       "test": "ws-cre-modernization-test/lh_cre_gold",

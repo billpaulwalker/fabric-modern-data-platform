@@ -30,10 +30,10 @@ def _load_notebook(file_name, module_name):
     return module
 
 
-bronze_nb = _load_notebook("01_bronze_ingestion_pyspark.py", "bronze_notebook")
-silver_nb = _load_notebook("04_silver_transformations_pyspark.py", "silver_notebook")
-gold_nb = _load_notebook("05_gold_dimensional_model_pyspark.py", "gold_notebook")
-semantic_nb = _load_notebook("06_validate_semantic_model_pyspark.py", "semantic_notebook")
+bronze_nb = _load_notebook("nb_cre_bronze_ingest.py", "nb_cre_bronze_ingest")
+silver_nb = _load_notebook("nb_cre_silver_transform.py", "nb_cre_silver_transform")
+gold_nb = _load_notebook("nb_cre_gold_build_model.py", "nb_cre_gold_build_model")
+semantic_nb = _load_notebook("nb_cre_gold_validate_model.py", "nb_cre_gold_validate_model")
 
 
 @pytest.fixture(scope="module")

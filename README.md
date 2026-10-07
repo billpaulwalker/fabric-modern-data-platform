@@ -194,9 +194,7 @@ Follow `powerbi/semantic-model/build-guide.md` to create the semantic model and 
 
 ## Orchestration and Observability
 
-`pl_cre_end_to_end` coordinates:
-
-The SQL, API, and file Bronze activities must all succeed before Silver runs. Silver is followed by Gold, semantic validation, and unit tests.
+`pl_cre_end_to_end` coordinates the medallion flow. In Fabric it runs `nb_cre_bronze_ingest`, `nb_cre_silver_transform`, `nb_cre_gold_build_model`, and `nb_cre_gold_validate_model` in order, each only after the previous one succeeds. Locally, the SQL, API, and file Bronze steps must all succeed before Silver runs, and Silver is followed by Gold, semantic validation, and unit tests.
 
 The orchestration framework includes:
 
@@ -209,7 +207,7 @@ The orchestration framework includes:
 - Captured status, attempt, duration, return code, and bounded error details
 - Operations health reporting
 
-The local runner mirrors the Fabric activity graph. `pipelines/fabric-pipeline-manifest.json` is a logical build specification, not an exported Fabric deployment definition.
+The local runner follows the same layer order with finer-grained Bronze steps. `pipelines/fabric-pipeline-manifest.json` is a logical build specification for the Fabric pipeline, not an exported Fabric deployment definition.
 
 ## Testing and Validation
 
@@ -257,15 +255,15 @@ The delivery model uses:
 
 - `.github/workflows/`: repository, end-to-end, and release automation
 - `architecture/`: architecture and source-to-target documentation
-- `config/`: source, Silver, Gold, semantic, pipeline, and environment contracts
+- `config/`: Fabric layout, Bronze source, Silver, Gold, semantic, pipeline, and environment contracts
 - `data/`: committed samples and ignored generated outputs
 - `deployment/`: promotion rules, checklists, Azure pipeline, and rollback
 - `docs/`: phase guides, operations guidance, and case-study material
-- `notebooks/`: local phase runners and Fabric PySpark/Delta implementations
+- `notebooks/`: local phase runners, and Fabric PySpark/Delta notebooks in `notebooks/fabric/` named as their Fabric items
 - `pipelines/`: Fabric pipeline design manifest
 - `powerbi/`: semantic model, DAX, report design, and theme
 - `scripts/`: release validation, gates, and packaging
-- `sql/`: DDL and acceptance queries
+- `sql/`: control, logging, and watermark table designs, and SQL analytics endpoint acceptance queries
 - `src/`: reusable ingestion, transformation, orchestration, and deployment logic
 - `tests/`: unit and contract tests
 
@@ -405,7 +403,6 @@ Generated releases are written to `dist/` and should not be committed.
 - Dev/Test/Prod promotion: `deployment/dev-test-prod-guide.md`
 - Rollback: `deployment/rollback-runbook-phase-7.md`
 - Interview preparation: `docs/interview-talking-points.md`
-- Lessons learned: `docs/lessons-learned.md`
 
 ## Project Status
 

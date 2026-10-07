@@ -1,6 +1,6 @@
 # Source-to-Target Mapping
 
-Column renames and calculations live in `config/silver_table_config.json` (`column_mappings`, `derived_columns`) and are applied identically by the local pandas pipeline and the Fabric PySpark notebook. Gold-only logic lives in `src/gold_utils.py` and `notebooks/fabric/05_gold_dimensional_model_pyspark.py`.
+Column renames and calculations live in `config/silver_table_config.json` (`column_mappings`, `derived_columns`) and are applied identically by the local pandas pipeline and the Fabric PySpark notebook. Gold-only logic lives in `src/gold_utils.py` and `notebooks/fabric/nb_cre_gold_build_model.py`.
 
 Fabric table locations are declared in `config/fabric_layout.json`: Bronze tables in `lh_cre_bronze` by source system, Silver tables in `lh_cre_silver` by business domain, and Gold tables in `lh_cre_gold` with conformed dimensions in `shared` and facts by domain. Local runs write the same data as flat CSV files, for example `data/bronze/bronze_leases.csv` and `data/silver/silver_leases.csv`.
 

@@ -1,4 +1,4 @@
--- Run in the lh_cre_gold SQL analytics endpoint after 05_gold_dimensional_model.
+-- Run in the lh_cre_gold SQL analytics endpoint after nb_cre_gold_build_model.
 -- Table names follow config/fabric_layout.json: dimensions in shared, facts in their domain schema.
 
 -- 1. Model row counts

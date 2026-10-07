@@ -18,16 +18,16 @@ Every table's location is declared once in `config/fabric_layout.json`. The note
 
 ```text
 lh_cre_bronze  Files/landing/*.csv, *.json
-                      │  01_bronze_ingestion
+                      │  nb_cre_bronze_ingest
                       ▼
 lh_cre_bronze  cre_sql.*, business_files.*, openweather.weather_raw
-                      │  04_silver_transformations
+                      │  nb_cre_silver_transform
                       ▼
 lh_cre_silver  property.*, leasing.*, finance.*, operations.*, environment.*  ──► quarantine.rejected_records
-                      │  05_gold_dimensional_model
+                      │  nb_cre_gold_build_model
                       ▼
 lh_cre_gold    shared.dim_*, leasing.fact_*, finance.fact_*, operations.fact_*
-                      │  06_validate_semantic_model
+                      │  nb_cre_gold_validate_model
                       ▼
                pass / fail: blocks the semantic-model refresh on failure
 ```
@@ -62,14 +62,14 @@ Each Lakehouse holds the config for the notebook that writes into it. Create the
 
 ## 4. Create the Notebooks
 
-Create one notebook per file, set its **default** Lakehouse as shown, and paste the file's full contents into the first cell:
+Create one notebook per file, named exactly as the file without `.py`, set its **default** Lakehouse as shown, and paste the file's full contents into the first cell. The names follow the project naming standard in `architecture/architecture-overview.md`, so the workspace, the repository, and Git integration later all use the same names.
 
 | Notebook name | Repository file | Default Lakehouse |
 |---|---|---|
-| `01_bronze_ingestion` | `notebooks/fabric/01_bronze_ingestion_pyspark.py` | `lh_cre_bronze` |
-| `04_silver_transformations` | `notebooks/fabric/04_silver_transformations_pyspark.py` | `lh_cre_silver` |
-| `05_gold_dimensional_model` | `notebooks/fabric/05_gold_dimensional_model_pyspark.py` | `lh_cre_gold` |
-| `06_validate_semantic_model` | `notebooks/fabric/06_validate_semantic_model_pyspark.py` | `lh_cre_gold` |
+| `nb_cre_bronze_ingest` | `notebooks/fabric/nb_cre_bronze_ingest.py` | `lh_cre_bronze` |
+| `nb_cre_silver_transform` | `notebooks/fabric/nb_cre_silver_transform.py` | `lh_cre_silver` |
+| `nb_cre_gold_build_model` | `notebooks/fabric/nb_cre_gold_build_model.py` | `lh_cre_gold` |
+| `nb_cre_gold_validate_model` | `notebooks/fabric/nb_cre_gold_validate_model.py` | `lh_cre_gold` |
 
 Each notebook's default Lakehouse is the one it writes to. It reads its config from `/lakehouse/default/Files/config`, and the Bronze notebook reads landing files from `Files/landing`. Tables in other Lakehouses are read by their full `lakehouse.schema.table` name.
 
@@ -79,12 +79,12 @@ Each file runs its work under `if __name__ == "__main__":`, which is true inside
 
 Run each notebook with **Run all**, waiting for each to finish:
 
-1. `01_bronze_ingestion`
-2. `04_silver_transformations`
-3. `05_gold_dimensional_model`
-4. `06_validate_semantic_model`
+1. `nb_cre_bronze_ingest`
+2. `nb_cre_silver_transform`
+3. `nb_cre_gold_build_model`
+4. `nb_cre_gold_validate_model`
 
-The first run of `01_bronze_ingestion` also confirms that Fabric accepts the `lakehouse.schema.table` names the notebooks use. If it fails on a table or schema name, see Troubleshooting.
+The first run of `nb_cre_bronze_ingest` also confirms that Fabric accepts the `lakehouse.schema.table` names the notebooks use. If it fails on a table or schema name, see Troubleshooting.
 
 Each notebook fails loudly instead of writing bad data:
 
@@ -119,7 +119,7 @@ Expected tables and row counts with the sample data:
 | `finance.fact_property_budget` | 30 |
 | `operations.fact_maintenance_request` | 5 |
 
-`06_validate_semantic_model` prints a report with `"passed": true`.
+`nb_cre_gold_validate_model` prints a report with `"passed": true`.
 
 Spot-check totals in the `lh_cre_gold` **SQL analytics endpoint**:
 

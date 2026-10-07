@@ -1,4 +1,4 @@
--- Run in the lh_cre_silver SQL analytics endpoint after 04_silver_transformations.
+-- Run in the lh_cre_silver SQL analytics endpoint after nb_cre_silver_transform.
 -- Table names follow config/fabric_layout.json (one schema per business domain).
 
 -- 1. Row counts by Silver table

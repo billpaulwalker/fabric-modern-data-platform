@@ -13,7 +13,7 @@ The validation must pass before model creation. It checks Gold schemas, unique k
 
 ## 2. Create the Direct Lake Model
 
-1. Open the environment's workspace and run `06_validate_semantic_model` there; it must pass.
+1. Open the environment's workspace and run `nb_cre_gold_validate_model` there; it must pass.
 2. Create a new semantic model from the `lh_cre_gold` Lakehouse.
 3. Name it **CRE Portfolio Analytics**.
 4. Select only the seven tables in `config/semantic_model_config.json`: `dim_property`, `dim_tenant`, and `dim_date` from the `shared` schema, and the facts from `leasing`, `finance`, and `operations` (see `config/fabric_layout.json`).

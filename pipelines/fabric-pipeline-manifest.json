@@ -3,32 +3,41 @@
   "purpose": "Logical implementation manifest for a Microsoft Fabric Data Pipeline",
   "parameters": ["environment", "pipeline_run_id"],
   "activities": [
-    {"name": "nb_bronze_sql", "type": "Notebook", "depends_on": [], "retry": 0, "timeout_minutes": 30},
-    {"name": "nb_bronze_api", "type": "Notebook", "depends_on": [], "retry": 2, "timeout_minutes": 30},
-    {"name": "nb_bronze_files", "type": "Notebook", "depends_on": [], "retry": 0, "timeout_minutes": 30},
     {
-      "name": "nb_silver_transformations",
+      "name": "nb_cre_bronze_ingest",
       "type": "Notebook",
-      "notebook": "notebooks/fabric/04_silver_transformations_pyspark.py",
-      "depends_on": ["nb_bronze_sql", "nb_bronze_api", "nb_bronze_files"],
+      "notebook": "notebooks/fabric/nb_cre_bronze_ingest.py",
+      "default_lakehouse": "lh_cre_bronze",
+      "depends_on": [],
+      "retry": 1,
+      "timeout_minutes": 30
+    },
+    {
+      "name": "nb_cre_silver_transform",
+      "type": "Notebook",
+      "notebook": "notebooks/fabric/nb_cre_silver_transform.py",
+      "default_lakehouse": "lh_cre_silver",
+      "depends_on": ["nb_cre_bronze_ingest"],
       "dependency_condition": "Succeeded",
       "retry": 0,
       "timeout_minutes": 45
     },
     {
-      "name": "nb_gold_dimensional_model",
+      "name": "nb_cre_gold_build_model",
       "type": "Notebook",
-      "notebook": "notebooks/fabric/05_gold_dimensional_model_pyspark.py",
-      "depends_on": ["nb_silver_transformations"],
+      "notebook": "notebooks/fabric/nb_cre_gold_build_model.py",
+      "default_lakehouse": "lh_cre_gold",
+      "depends_on": ["nb_cre_silver_transform"],
       "dependency_condition": "Succeeded",
       "retry": 0,
       "timeout_minutes": 45
     },
     {
-      "name": "nb_semantic_validation",
+      "name": "nb_cre_gold_validate_model",
       "type": "Notebook",
-      "notebook": "notebooks/fabric/06_validate_semantic_model_pyspark.py",
-      "depends_on": ["nb_gold_dimensional_model"],
+      "notebook": "notebooks/fabric/nb_cre_gold_validate_model.py",
+      "default_lakehouse": "lh_cre_gold",
+      "depends_on": ["nb_cre_gold_build_model"],
       "dependency_condition": "Succeeded",
       "retry": 0,
       "timeout_minutes": 15
@@ -36,7 +45,7 @@
     {
       "name": "log_pipeline_failure",
       "type": "StoredProcedureOrNotebook",
-      "depends_on": ["nb_bronze_sql", "nb_bronze_api", "nb_bronze_files", "nb_silver_transformations", "nb_gold_dimensional_model", "nb_semantic_validation"],
+      "depends_on": ["nb_cre_bronze_ingest", "nb_cre_silver_transform", "nb_cre_gold_build_model", "nb_cre_gold_validate_model"],
       "dependency_condition": "FailedOrSkipped"
     }
   ]

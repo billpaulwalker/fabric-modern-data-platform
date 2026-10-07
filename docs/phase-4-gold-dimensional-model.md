@@ -54,7 +54,7 @@ Review `data/gold/gold_model_metrics.json` and the generated model CSV files. Th
 
 1. Confirm the required Silver tables exist in `lh_cre_silver`.
 2. Upload `config/fabric_layout.json` and `config/gold_model_config.json` to `lh_cre_gold` at `Files/config/`.
-3. Create a notebook from `notebooks/fabric/05_gold_dimensional_model_pyspark.py` with `lh_cre_gold` as its default Lakehouse.
+3. Create a notebook from `notebooks/fabric/nb_cre_gold_build_model.py` with `lh_cre_gold` as its default Lakehouse.
 4. Run all cells. Conformed dimensions land in the `shared` schema and facts in `leasing`, `finance`, and `operations`. The notebook checks every model's grain before writing.
 5. Execute `sql/gold_acceptance_queries.sql` in the `lh_cre_gold` SQL analytics endpoint.
 6. Compare fact counts to their corresponding Silver sources.
