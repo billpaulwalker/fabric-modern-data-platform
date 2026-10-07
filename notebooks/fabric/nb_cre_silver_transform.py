@@ -9,7 +9,7 @@ import re
 
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
-from pyspark.sql.types import StringType, StructType
+from pyspark.sql.types import ArrayType, LongType, StringType, StructField, StructType
 
 
 CONFIG_DIRECTORY = "/lakehouse/default/Files/config"
@@ -253,5 +253,20 @@ def main(spark, config_directory: str = CONFIG_DIRECTORY) -> list:
     return [metrics for _, _, metrics in results]
 
 
+METRICS_SCHEMA = StructType([
+    StructField("table", StringType()),
+    StructField("rows_read", LongType()),
+    StructField("rows_valid", LongType()),
+    StructField("rows_rejected", LongType()),
+    StructField("duplicate_rows_removed", LongType()),
+    StructField("missing_configured_columns", ArrayType(StringType())),
+])
+
+
+def metrics_frame(spark, metrics: list) -> DataFrame:
+    # An explicit schema: a healthy run reports [] for every table, which Spark cannot type by inference.
+    return spark.createDataFrame(metrics, METRICS_SCHEMA)
+
+
 if __name__ == "__main__":
-    display(spark.createDataFrame(main(spark)))  # noqa: F821 - spark and display are Fabric notebook globals
+    display(metrics_frame(spark, main(spark)))  # noqa: F821 - spark and display are Fabric notebook globals

@@ -229,6 +229,19 @@ def test_silver_flattens_nested_api_payload(spark, tmp_path):
     assert metrics["missing_configured_columns"] == []
 
 
+def test_silver_metrics_frame_builds_when_no_columns_are_missing(spark, fabric_run):
+    # A healthy run reports [] for every table, from which Spark cannot infer a type.
+    # Only the schema is checked: building the frame is where inference failed in Fabric.
+    for metrics in ([{"table": "leases", "rows_read": 6, "rows_valid": 6, "rows_rejected": 0,
+                      "duplicate_rows_removed": 0, "missing_configured_columns": []}],
+                    fabric_run["silver_metrics"]):
+        frame = silver_nb.metrics_frame(spark, metrics)
+        assert frame.schema.simpleString() == (
+            "struct<table:string,rows_read:bigint,rows_valid:bigint,rows_rejected:bigint,"
+            "duplicate_rows_removed:bigint,missing_configured_columns:array<string>>"
+        )
+
+
 def test_silver_reports_configured_columns_absent_from_source(csv_frame):
     config = {
         "name": "leases",
