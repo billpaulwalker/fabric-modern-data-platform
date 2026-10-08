@@ -171,7 +171,7 @@ budget_noi = budget_revenue - budget_expense
 
 The version-controlled semantic contract defines:
 
-- Seven Gold tables
+- Seven Gold tables, plus the pipeline run log for the Data Quality page
 - Twelve one-to-many relationships
 - Active primary-date relationships
 - Inactive lease-end and maintenance-completion relationships

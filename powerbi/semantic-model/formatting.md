@@ -29,5 +29,12 @@
 | Rent to Budget Variance % | `0.0%` |
 | Property Count | `#,0` |
 | Tenant Count | `#,0` |
+| Unknown Property Payments | `#,0` |
+| Unknown Tenant Payments | `#,0` |
+| Latest Silver Processing Time | `yyyy-mm-dd hh:nn` |
+| Pipeline Run Count | `#,0` |
+| Failed Pipeline Runs | `#,0` |
+| Pipeline Run Success Rate | `0.0%` |
+| Latest Run Logged At | `yyyy-mm-dd hh:nn` |
 
 Set fact numeric columns to **Do not summarize** so report authors use governed measures rather than implicit aggregations.

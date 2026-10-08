@@ -156,5 +156,5 @@ These outlast the trial and belong in the README and portfolio:
 ## Next Steps
 
 1. **Data Pipeline:** build `pl_cre_end_to_end` by following `docs/fabric-data-pipeline.md`. It runs the four notebooks in order, passes the pipeline run ID into Bronze, and logs every run to `lh_cre_gold.audit.pipeline_runs`.
-2. **Semantic model and report:** create the Direct Lake model over `lh_cre_gold`, including the `shared`, `leasing`, `finance`, and `operations` schemas, using `docs/phase-5-powerbi-semantic-model.md` and `powerbi/semantic-model/`.
+2. **Semantic model and report:** build the Direct Lake model and report over `lh_cre_gold` with `powerbi/semantic-model/build-guide.md`, then add the model refresh to the pipeline (section 9 of `docs/fabric-data-pipeline.md`).
 3. **Git integration and deployment:** connect the workspace to Git, then promote Development → Test → Production with a Fabric deployment pipeline and `deployment/deployment-rules.json`, which binds each notebook to the matching Lakehouse in each stage's workspace.

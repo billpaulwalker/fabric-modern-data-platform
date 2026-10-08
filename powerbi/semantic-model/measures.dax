@@ -99,6 +99,39 @@ DEFINE
             'dim_tenant'[tenant_key] <> 0
         )
 
+    -- Data quality: payments whose keys resolved to the Unknown member (key 0).
+    MEASURE 'fact_rent_payment'[Unknown Property Payments] =
+        CALCULATE([Payment Count], KEEPFILTERS('fact_rent_payment'[property_key] = 0))
+
+    MEASURE 'fact_rent_payment'[Unknown Tenant Payments] =
+        CALCULATE([Payment Count], KEEPFILTERS('fact_rent_payment'[tenant_key] = 0))
+
+    MEASURE 'fact_rent_payment'[Latest Silver Processing Time] =
+        MAX('fact_rent_payment'[silver_processed_timestamp])
+
+    -- Pipeline health from audit.pipeline_runs, a disconnected table with one row per run.
+    MEASURE 'pipeline_runs'[Pipeline Run Count] =
+        COUNTROWS('pipeline_runs')
+
+    MEASURE 'pipeline_runs'[Failed Pipeline Runs] =
+        CALCULATE([Pipeline Run Count], KEEPFILTERS('pipeline_runs'[status] = "Failed"))
+
+    MEASURE 'pipeline_runs'[Pipeline Run Success Rate] =
+        DIVIDE([Pipeline Run Count] - [Failed Pipeline Runs], [Pipeline Run Count])
+
+    MEASURE 'pipeline_runs'[Latest Run Logged At] =
+        MAX('pipeline_runs'[logged_at])
+
+    MEASURE 'pipeline_runs'[Latest Run Status] =
+        VAR LatestLoggedAt = [Latest Run Logged At]
+        RETURN
+            CALCULATE(MAX('pipeline_runs'[status]), 'pipeline_runs'[logged_at] = LatestLoggedAt)
+
+    MEASURE 'pipeline_runs'[Latest Run ID] =
+        VAR LatestLoggedAt = [Latest Run Logged At]
+        RETURN
+            CALCULATE(MAX('pipeline_runs'[pipeline_run_id]), 'pipeline_runs'[logged_at] = LatestLoggedAt)
+
 EVALUATE
     ROW(
         "Total Rent Due", [Total Rent Due],

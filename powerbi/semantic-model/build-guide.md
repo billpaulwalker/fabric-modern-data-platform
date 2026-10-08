@@ -1,86 +1,101 @@
 # Semantic Model Build Guide
 
+This guide builds the **CRE Portfolio Analytics** Direct Lake semantic model and report in the Development workspace. It assumes `pl_cre_end_to_end` has run successfully, so the Gold tables and `audit.pipeline_runs` exist in `lh_cre_gold`.
+
+Fabric's interface changes often, so menu names below may differ slightly from what you see.
+
 ## 1. Validate Gold
 
-From the repository root:
+The model contract is validated in two places, and both must pass:
 
-```powershell
-python notebooks/06_validate_semantic_model.py
-python -m pytest
-```
-
-The validation must pass before model creation. It checks Gold schemas, unique keys, relationship coverage, and the required DAX inventory.
+- **Repository:** `python notebooks/06_validate_semantic_model.py` checks the local Gold outputs, relationship coverage, and that every measure in `config/semantic_model_config.json` exists in `measures.dax`.
+- **Fabric:** the latest pipeline run's `nb_cre_gold_validate_model` checks the real `lh_cre_gold` tables.
 
 ## 2. Create the Direct Lake Model
 
-1. Open the environment's workspace and run `nb_cre_gold_validate_model` there; it must pass.
-2. Create a new semantic model from the `lh_cre_gold` Lakehouse.
-3. Name it **CRE Portfolio Analytics**.
-4. Select only the seven tables in `config/semantic_model_config.json`: `dim_property`, `dim_tenant`, and `dim_date` from the `shared` schema, and the facts from `leasing`, `finance`, and `operations` (see `config/fabric_layout.json`).
-5. Confirm the model uses Direct Lake storage mode.
+1. From `lh_cre_gold`, create a new semantic model named **CRE Portfolio Analytics**.
+2. Select these eight tables:
 
-Do not expose Bronze or Silver tables to report authors. Because they live in `lh_cre_bronze` and `lh_cre_silver`, they never appear in the Gold Lakehouse the model binds to.
+   | Schema | Tables | Role |
+   |---|---|---|
+   | `shared` | `dim_property`, `dim_tenant`, `dim_date` | Conformed dimensions |
+   | `leasing` | `fact_lease`, `fact_rent_payment` | Facts |
+   | `finance` | `fact_property_budget` | Fact |
+   | `operations` | `fact_maintenance_request` | Fact |
+   | `audit` | `pipeline_runs` | Pipeline health for the Data Quality page; no relationships |
 
-## 3. Configure Relationships
+3. Confirm the storage mode is Direct Lake.
 
-Create the relationships from `config/semantic_model_config.json` and `docs/gold-model-relationships.md`.
+Bronze and Silver tables live in other Lakehouses, so they can't be added to this model by mistake.
 
-- Dimension side: one
-- Fact side: many
-- Cross-filter direction: single
-- Primary reporting-date relationships: active
-- Lease end date and maintenance completion date: inactive
-- Assume referential integrity only after validation confirms it
+## 3. Turn Off Automatic Updates
 
-Do not add fact-to-fact or bidirectional relationships.
+In the semantic model's settings, turn off the option that keeps Direct Lake data up to date automatically.
 
-## 4. Configure the Date Dimension
+With it on, the model picks up Gold changes as soon as `nb_cre_gold_build_model` writes them, before `nb_cre_gold_validate_model` has checked them. With it off, the model changes only when the pipeline's `refresh_semantic_model` activity runs, which happens only after validation succeeds (see section 9 of `docs/fabric-data-pipeline.md`). Until that activity exists, refresh the model manually after a successful run.
 
-1. Mark `dim_date[full_date]` as the date table.
+## 4. Configure Relationships
+
+Create the twelve relationships in `docs/gold-model-relationships.md` (also declared in `config/semantic_model_config.json`):
+
+- One-to-many from dimension to fact, single cross-filter direction.
+- Primary reporting dates active; lease end date and maintenance completion date inactive, used by measures through `USERELATIONSHIP`.
+- No fact-to-fact or bidirectional relationships.
+- `pipeline_runs` stays disconnected.
+
+## 5. Configure the Date Dimension
+
+1. Mark `dim_date` as the date table, using `full_date`.
 2. Sort `month_name` by `calendar_month`.
 3. Use `year_month` for chronological month axes.
-4. Hide `date_key` from report view.
-5. Create a hierarchy: calendar year, calendar quarter, month name, full date.
+4. Create a hierarchy: `calendar_year`, `calendar_quarter`, `month_name`, `full_date`.
 
-## 5. Add Measures
+## 6. Add Measures
 
-1. Open DAX Query View.
-2. Open `powerbi/semantic-model/measures.dax` from the repository.
-3. Run the query to validate the expressions.
-4. Use **Update model with changes** to add the measures.
-5. Apply the formats in `powerbi/semantic-model/formatting.md`.
-6. Place measures into display folders: Collections, Leasing, Maintenance, Budget, Portfolio.
+1. Open DAX query view.
+2. Paste `powerbi/semantic-model/measures.dax` from the repository and run it to validate the expressions.
+3. Use **Update model with changes** to add the measures.
+4. Apply the formats in `powerbi/semantic-model/formatting.md`.
+5. Place measures into display folders: Collections, Leasing, Maintenance, Budget, Portfolio, and Data Quality (the unknown-key, processing-time, and pipeline-run measures).
 
-## 6. Curate the Field List
+## 7. Curate the Field List
 
-Hide surrogate keys, natural technical keys, pipeline identifiers, and processing timestamps listed in the semantic configuration. Set fact numeric columns to **Do not summarize**.
+1. Hide the columns listed under `hidden_columns` in `config/semantic_model_config.json`: surrogate keys, technical natural keys, pipeline run IDs, and processing timestamps.
+2. In `pipeline_runs`, keep `pipeline_run_id`, `status`, `environment`, `triggered_at`, and `message` visible for the Data Quality page, and hide `pipeline_name` and `logged_at`.
+3. Set fact numeric columns to **Do not summarize**, so report authors use the governed measures.
+4. Keep business labels, categories, dates, statuses, and measures visible, and give important fields short descriptions.
 
-Keep business labels, categories, dates, statuses, and governed measures visible. Give important fields concise descriptions.
+## 8. Validate Measures
 
-## 7. Validate Measures
+Compare these with `sql/semantic_model_validation.sql` in the `lh_cre_gold` SQL analytics endpoint. With the sample data:
 
-Compare these measures with `sql/semantic_model_validation.sql`:
+| Measure | Expected |
+|---|---|
+| Total Rent Due | 3,988,950 |
+| Total Rent Collected | 3,988,950 |
+| Outstanding Rent | 0 |
+| Collection Rate | 100.0% |
+| Monthly Contracted Rent | 664,825 |
+| Budget Revenue | 2,428,558 |
+| Unknown Property Payments | 0 |
+| Latest Run Status | Succeeded |
 
-- Total Rent Due
-- Total Rent Collected
-- Outstanding Rent
-- Collection Rate
+Test filters for date, property, region, tenant, and status, and confirm Leases Ending and Completed Maintenance Requests use the inactive date relationships.
 
-Test filters for date, property, region, tenant, and status. Confirm inactive-date measures use lease-end and completion dates as intended.
+## 9. Build the Report
 
-## 8. Build the Report
+Import `powerbi/theme/cre-portfolio-theme.json`, then build the pages in `powerbi/report/report-pages.md`. Keep slicers and navigation consistent across pages. Save the report in the Development workspace as **CRE Portfolio Analytics**.
 
-Import `powerbi/theme/cre-portfolio-theme.json`, then implement the pages in `powerbi/report/report-pages.md`. Keep slicers and navigation consistent across pages.
+## 10. Add the Refresh to the Pipeline
 
-## 9. Publish and Record Evidence
+Follow section 9 of `docs/fabric-data-pipeline.md` to add `refresh_semantic_model` after validation, so each successful run updates the model and failed runs never reach the report.
 
-Save the report and semantic model in the Development workspace. Capture screenshots of:
+## 11. Record Evidence
 
-- Model relationships
-- DAX measures
-- Executive Overview
-- Collections page
-- Fabric lineage view
-- Successful semantic validation output
+Capture screenshots of:
 
-These images provide concrete portfolio and interview evidence.
+- The model diagram with its relationships
+- The measures in their display folders
+- The Executive Overview, Rent Collections, and Data Quality pages
+- The workspace lineage view from `lh_cre_bronze` through the model to the report
+- A pipeline run including `refresh_semantic_model`

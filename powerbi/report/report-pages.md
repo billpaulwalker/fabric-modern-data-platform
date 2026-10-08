@@ -61,12 +61,17 @@
 
 ## Page 6: Data Quality
 
-This operational page is optional for business consumers but valuable in the portfolio demonstration.
+This operational page is optional for business consumers but valuable in the portfolio demonstration. It reads `audit.pipeline_runs`, which `pl_cre_end_to_end` appends to on every run, alongside the Gold facts.
+
+**Slicers:** Environment, run date (`pipeline_runs[triggered_at]`)
+
+**KPI cards:** Latest Run Status, Latest Run Logged At, Pipeline Run Success Rate, Latest Silver Processing Time
 
 **Visuals:**
 
-- Gold row counts by model
-- Unknown property-key and tenant-key counts
-- Latest pipeline run identifier
-- Latest Silver processing timestamp
-- Validation status from the deployment checklist
+- Runs by status over time: stacked column chart of Pipeline Run Count by `triggered_at` date and `status`
+- Recent runs: table of `triggered_at`, `pipeline_run_id`, `status`, `environment`, and `message`, sorted newest first
+- Unknown-member check: cards for Unknown Property Payments and Unknown Tenant Payments, which should read 0
+- Model volumes: cards for Payment Count, Lease Count, Maintenance Request Count, Property Count, and Tenant Count
+
+Rejected Silver rows live in `lh_cre_silver.quarantine.rejected_records`, outside this model; review them with `sql/silver_acceptance_queries.sql`.

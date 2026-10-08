@@ -12,8 +12,9 @@
 | `nb_cre_silver_transform` | `nb_cre_silver_transform` | `lh_cre_silver` | Bronze succeeded |
 | `nb_cre_gold_build_model` | `nb_cre_gold_build_model` | `lh_cre_gold` | Silver succeeded |
 | `nb_cre_gold_validate_model` | `nb_cre_gold_validate_model` | (reads `lh_cre_gold`) | Gold succeeded |
-| `log_run_succeeded` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Validation succeeded |
-| `log_run_failed` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Validation failed **or** was skipped |
+| `refresh_semantic_model` | Semantic model refresh: **CRE Portfolio Analytics** | (the model) | Validation succeeded |
+| `log_run_succeeded` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Refresh succeeded |
+| `log_run_failed` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Refresh failed **or** was skipped |
 
 Medallion activities are named after the notebook they run.
 
@@ -33,8 +34,12 @@ The default Lakehouse now only supplies config and landing files. Every table is
 
 Every run writes exactly one row to `lh_cre_gold.audit.pipeline_runs`, with the run ID, pipeline name, environment, status, trigger time, and log time.
 
-- `log_run_succeeded` depends on validation **succeeding**.
-- `log_run_failed` depends on validation **failing or being skipped**. Two conditions on the same dependency are combined with OR, and any failure earlier in the chain skips validation, so this one activity catches every failed run without a dependency on each step.
+- `log_run_succeeded` depends on the refresh **succeeding**.
+- `log_run_failed` depends on the refresh **failing or being skipped**. Two conditions on the same dependency are combined with OR, and any failure earlier in the chain skips the refresh, so this one activity catches every failed run without a dependency on each step.
+
+## Validation Gates the Report
+
+The semantic model's automatic Direct Lake updates are turned off, so it changes only when `refresh_semantic_model` runs, and that runs only after `nb_cre_gold_validate_model` succeeds. Gold tables that fail validation are never shown in the report; it keeps the last validated data until a run passes.
 
 This is the generic error-handling pattern Fabric pipelines inherit from Azure Data Factory. The run log lives in the Gold Lakehouse so the Direct Lake model can report pipeline health beside the business data.
 
@@ -50,5 +55,4 @@ Because Bronze stamps every row with the pipeline's own run ID, any Bronze, Silv
 ## Design Notes
 
 - Each notebook fails loudly before writing bad data (missing landing files, absent configured columns, grain violations, semantic contract failures), so the pipeline's success condition is the data-quality gate.
-- The semantic model should refresh only after `nb_cre_gold_validate_model` succeeds.
 - `pipelines/adf-style-orchestration-pattern.md` describes the metadata-driven Lookup/ForEach pattern planned for watermark-based incremental loads.

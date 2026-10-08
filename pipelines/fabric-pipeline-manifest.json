@@ -51,11 +51,20 @@
       "timeout_minutes": 15
     },
     {
+      "name": "refresh_semantic_model",
+      "type": "SemanticModelRefresh",
+      "semantic_model": "CRE Portfolio Analytics",
+      "depends_on": [{"activity": "nb_cre_gold_validate_model", "conditions": ["Succeeded"]}],
+      "retry": 1,
+      "retry_interval_seconds": 120,
+      "timeout_minutes": 15
+    },
+    {
       "name": "log_run_succeeded",
       "type": "Notebook",
       "notebook": "notebooks/fabric/nb_cre_gold_log_pipeline_run.py",
       "default_lakehouse": "lh_cre_bronze",
-      "depends_on": [{"activity": "nb_cre_gold_validate_model", "conditions": ["Succeeded"]}],
+      "depends_on": [{"activity": "refresh_semantic_model", "conditions": ["Succeeded"]}],
       "base_parameters": {
         "pipeline_run_id": "@pipeline().RunId",
         "pipeline_name": "@pipeline().Pipeline",
@@ -73,7 +82,7 @@
       "type": "Notebook",
       "notebook": "notebooks/fabric/nb_cre_gold_log_pipeline_run.py",
       "default_lakehouse": "lh_cre_bronze",
-      "depends_on": [{"activity": "nb_cre_gold_validate_model", "conditions": ["Failed", "Skipped"]}],
+      "depends_on": [{"activity": "refresh_semantic_model", "conditions": ["Failed", "Skipped"]}],
       "base_parameters": {
         "pipeline_run_id": "@pipeline().RunId",
         "pipeline_name": "@pipeline().Pipeline",

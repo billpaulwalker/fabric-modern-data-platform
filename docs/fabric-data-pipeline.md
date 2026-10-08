@@ -16,6 +16,8 @@ nb_cre_bronze_ingest ──► nb_cre_silver_transform ──► nb_cre_gold_bui
 
 Each run writes one row to `lh_cre_gold.audit.pipeline_runs`, and every Bronze, Silver, and Gold row carries the pipeline's run ID.
 
+Once the semantic model exists, section 9 inserts a `refresh_semantic_model` activity between validation and the two logging activities.
+
 ## 1. Size Spark for the Trial
 
 Open the workspace settings, then the Spark settings for Data Engineering:
@@ -138,6 +140,32 @@ Capture both runs in the Monitor hub; a deliberate failure handled cleanly is st
 
 Leave Development unscheduled; `config/environments/dev.json` sets `schedule_enabled` to `false`. Production gets a daily schedule after it passes validation, as described in `deployment/dev-test-prod-guide.md`.
 
+## 9. Add the Semantic Model Refresh
+
+Do this after building the **CRE Portfolio Analytics** model with `powerbi/semantic-model/build-guide.md`, including turning off its automatic Direct Lake updates. The refresh then becomes the only way new Gold data reaches the report, and it runs only after validation succeeds.
+
+1. Add a **Semantic model refresh** activity named `refresh_semantic_model`. Select the workspace and the **CRE Portfolio Analytics** model, and set **Retry** 1 and **Retry interval** 120 seconds.
+2. Remove the three connections from `nb_cre_gold_validate_model` to the logging activities.
+3. Reconnect:
+
+   | From | Outcome | To |
+   |---|---|---|
+   | `nb_cre_gold_validate_model` | On success | `refresh_semantic_model` |
+   | `refresh_semantic_model` | On success | `log_run_succeeded` |
+   | `refresh_semantic_model` | On fail | `log_run_failed` |
+   | `refresh_semantic_model` | On skip | `log_run_failed` |
+
+   The failure log now watches the last step, so it still catches a failure anywhere: an earlier failure skips the refresh.
+4. Run the pipeline and confirm `refresh_semantic_model` succeeds and the report shows the run under Latest Run Status.
+
+```text
+... ──► nb_cre_gold_validate_model ──► refresh_semantic_model
+                                            │
+                          on success ───────┤──── on fail or on skip
+                               ▼                         ▼
+                       log_run_succeeded          log_run_failed
+```
+
 ## Evidence to Capture
 
 - The pipeline canvas with all six activities and their connections
@@ -152,7 +180,8 @@ Leave Development unscheduled; `config/environments/dev.json` sets `schedule_ena
 | Bronze rows show a generated `bronze_...` run ID, not the pipeline's | The parameter cell isn't marked, or the code is in the same cell. Split the notebook as in step 2 and toggle the parameter cell. |
 | `TooManyRequestsForCapacity` / HTTP status code 430 | A notebook needed a new Spark session while another still held the capacity's compute. In this pipeline that happens when consecutive notebooks have different default Lakehouses: check that every notebook defaults to `lh_cre_bronze` (step 2) and every activity has the `cre_pipeline` session tag (step 4). Also cancel stray sessions in the **Monitor** hub and keep the Starter Pool small (step 1). The retry setting reruns a brief rejection automatically. |
 | `log_run_succeeded` fails with `pipeline_run_id is required` | Its base parameters are missing or misnamed. Compare them with step 4. |
-| `log_run_failed` doesn't run after a failure | It is connected only with **On fail**. Add the **On skip** connection from `nb_cre_gold_validate_model`. |
+| `log_run_failed` doesn't run after a failure | It is connected only with **On fail**. Add the **On skip** connection from the last activity: `refresh_semantic_model` once section 9 is done, otherwise `nb_cre_gold_validate_model`. |
+| The report shows new data before a run finishes | The model's automatic Direct Lake updates are still on. Turn them off (step 3 of `powerbi/semantic-model/build-guide.md`) so only `refresh_semantic_model` updates it. |
 | `audit.pipeline_runs ... is not declared in fabric_layout.json` | Upload the updated `config/fabric_layout.json` to `lh_cre_bronze` (step 2). |
 | `FileNotFoundError: ... /lakehouse/default/Files/config/fabric_layout.json` | The notebook has no default Lakehouse, or one other than `lh_cre_bronze`. Set `lh_cre_bronze` as its default (step 2). |
 | `triggered_at` is empty | The expression wasn't entered as dynamic content. Re-enter `@string(pipeline().TriggerTime)` through the expression editor. |

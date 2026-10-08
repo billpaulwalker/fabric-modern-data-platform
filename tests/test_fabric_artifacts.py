@@ -22,6 +22,10 @@ def _activities():
     return {activity["name"]: activity for activity in _load("pipelines/fabric-pipeline-manifest.json")["activities"]}
 
 
+def _notebook_activities():
+    return {name: activity for name, activity in _activities().items() if activity["type"] == "Notebook"}
+
+
 def test_fabric_notebooks_follow_the_naming_standard():
     # nb_<project>_<layer>[_<source system | domain>]_<purpose>
     assert FABRIC_NOTEBOOKS == {*MEDALLION_CHAIN, "nb_cre_gold_log_pipeline_run"}
@@ -36,10 +40,18 @@ def test_pipeline_runs_the_medallion_chain_in_order_on_success():
         assert activities[name]["notebook"] == f"notebooks/fabric/{name}.py"
 
 
+def test_semantic_model_refreshes_only_after_validation_succeeds():
+    # The model's automatic Direct Lake updates are off, so reports see new Gold data only after validation.
+    refresh = _activities()["refresh_semantic_model"]
+    assert refresh["type"] == "SemanticModelRefresh"
+    assert refresh["semantic_model"] == "CRE Portfolio Analytics"
+    assert refresh["depends_on"] == [{"activity": MEDALLION_CHAIN[-1], "conditions": ["Succeeded"]}]
+
+
 def test_pipeline_logs_every_run_exactly_once():
-    # Any upstream failure skips validation, so Failed-or-Skipped on the last step catches every failure.
+    # Any upstream failure skips the refresh, so Failed-or-Skipped on the last step catches every failure.
     activities = _activities()
-    last = MEDALLION_CHAIN[-1]
+    last = "refresh_semantic_model"
     succeeded, failed = activities["log_run_succeeded"], activities["log_run_failed"]
     assert succeeded["depends_on"] == [{"activity": last, "conditions": ["Succeeded"]}]
     assert failed["depends_on"] == [{"activity": last, "conditions": ["Failed", "Skipped"]}]
@@ -49,12 +61,13 @@ def test_pipeline_logs_every_run_exactly_once():
         assert activity["base_parameters"]["pipeline_run_id"] == "@pipeline().RunId"
 
 
-def test_every_notebook_activity_retries_once_and_shares_one_session():
-    # Capacity throttling (HTTP 430) is transient, and every notebook overwrites or appends idempotently,
+def test_every_activity_retries_once_and_notebooks_share_one_session():
+    # Capacity throttling (HTTP 430) and refresh contention are transient, and every step is safe to rerun,
     # so one delayed retry is safe. A shared session tag lets high concurrency mode reuse one Spark session.
     for activity in _activities().values():
         assert activity["retry"] == 1, activity["name"]
         assert activity["retry_interval_seconds"] == 120, activity["name"]
+    for activity in _notebook_activities().values():
         assert activity["session_tag"] == "cre_pipeline", activity["name"]
 
 
@@ -62,7 +75,7 @@ def test_every_pipeline_notebook_shares_one_default_lakehouse():
     # High concurrency reuses a Spark session only between notebooks with the same default lakehouse.
     # A change of default lakehouse forces a new session while the previous one still holds compute,
     # which a trial capacity rejects (HTTP 430). Tables are always addressed by their full names.
-    assert {activity["default_lakehouse"] for activity in _activities().values()} == {SHARED_DEFAULT_LAKEHOUSE}
+    assert {activity["default_lakehouse"] for activity in _notebook_activities().values()} == {SHARED_DEFAULT_LAKEHOUSE}
 
 
 def test_pipeline_dependencies_and_notebooks_exist():
@@ -71,6 +84,7 @@ def test_pipeline_dependencies_and_notebooks_exist():
         for dependency in activity["depends_on"]:
             assert dependency["activity"] in activities
             assert set(dependency["conditions"]) <= VALID_CONDITIONS
+    for activity in _notebook_activities().values():
         assert (REPO_ROOT / activity["notebook"]).exists()
 
 

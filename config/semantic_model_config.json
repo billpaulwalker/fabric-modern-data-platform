@@ -65,6 +65,9 @@
     "Annualized Contracted Rent", "Maintenance Request Count", "Open Maintenance Requests",
     "Estimated Maintenance Cost", "Actual Maintenance Cost", "Maintenance Cost Variance",
     "Average Resolution Days", "Budget Revenue", "Budget Expense", "Budget NOI",
-    "Rent to Budget Variance", "Property Count", "Tenant Count"
+    "Rent to Budget Variance", "Property Count", "Tenant Count",
+    "Unknown Property Payments", "Unknown Tenant Payments", "Latest Silver Processing Time",
+    "Pipeline Run Count", "Failed Pipeline Runs", "Pipeline Run Success Rate",
+    "Latest Run Status", "Latest Run ID", "Latest Run Logged At"
   ]
 }
