@@ -396,7 +396,7 @@ Generated releases are written to `dist/` and should not be committed.
 
 ## Documentation
 
-- Running in Microsoft Fabric: `docs/fabric-getting-started.md`
+- Running in Microsoft Fabric: `docs/fabric-getting-started.md`, then `docs/fabric-data-pipeline.md`
 - Architecture and layer guides: `architecture/` and `docs/`
 - Power BI implementation: `powerbi/semantic-model/build-guide.md`
 - Operations: `docs/operations-runbook-phase-6.md`

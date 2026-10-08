@@ -37,6 +37,13 @@
       "prod": "ws-cre-modernization-prod/lh_cre_gold"
     },
     {
+      "artifact": "nb_cre_gold_log_pipeline_run",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_gold",
+      "test": "ws-cre-modernization-test/lh_cre_gold",
+      "prod": "ws-cre-modernization-prod/lh_cre_gold"
+    },
+    {
       "artifact": "CRE Portfolio Analytics",
       "property": "gold_lakehouse_binding",
       "dev": "ws-cre-modernization-dev/lh_cre_gold",

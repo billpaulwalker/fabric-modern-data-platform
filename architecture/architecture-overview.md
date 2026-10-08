@@ -35,7 +35,7 @@ Each environment (Development, Test, Production) is one workspace containing a s
 |---|---|---|
 | `lh_cre_bronze` | Source system | `cre_sql`, `business_files`, `openweather` |
 | `lh_cre_silver` | Business domain | `property`, `leasing`, `finance`, `operations`, `environment`, `quarantine` |
-| `lh_cre_gold` | Business domain, with conformed dimensions shared | `shared`, `leasing`, `finance`, `operations` |
+| `lh_cre_gold` | Business domain, with conformed dimensions shared | `shared`, `leasing`, `finance`, `operations`, plus `audit` for the pipeline run log |
 
 `config/fabric_layout.json` is the single declaration of where every table lives; see `architecture/source-to-target-mapping.md` for the full list.
 
@@ -54,7 +54,7 @@ Technical Fabric items follow `<type>_<project>_<layer>[_<source system | domain
 |---|---|---|
 | Workspace | `ws-<project>-<environment>` | `ws-cre-modernization-dev` |
 | Lakehouse | `lh_` | `lh_cre_bronze`, `lh_cre_silver`, `lh_cre_gold` |
-| Notebook | `nb_` | `nb_cre_bronze_ingest`, `nb_cre_silver_transform`, `nb_cre_gold_build_model`, `nb_cre_gold_validate_model` |
+| Notebook | `nb_` | `nb_cre_bronze_ingest`, `nb_cre_silver_transform`, `nb_cre_gold_build_model`, `nb_cre_gold_validate_model`, `nb_cre_gold_log_pipeline_run` |
 | Data Pipeline | `pl_` | `pl_cre_end_to_end` |
 | Spark environment | `env_` | `env_cre_spark` |
 | Semantic model and report | Business-friendly name | **CRE Portfolio Analytics** |

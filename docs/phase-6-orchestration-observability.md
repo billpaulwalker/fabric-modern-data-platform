@@ -55,9 +55,9 @@ The runner uses the active Python interpreter, so the project virtual environmen
 
 ## Fabric Translation
 
-Use `pipelines/fabric-pipeline-manifest.json` as the build specification for a Fabric Data Pipeline. Replace local script activities with Fabric Notebook activities, pass `environment` and `pipeline_run_id` parameters, and configure failure logging on failed or skipped dependencies.
+`pl_cre_end_to_end` runs the four Fabric notebooks in order, passes the pipeline's run ID into Bronze so every layer's rows carry it, and logs every run, successful or failed, to `lh_cre_gold.audit.pipeline_runs`. Build it with `docs/fabric-data-pipeline.md`; the design is in `pipelines/fabric-pipeline-design.md`.
 
-The manifest is a platform-neutral design artifact, not an exported Fabric deployment definition.
+The manifest, `pipelines/fabric-pipeline-manifest.json`, is a design artifact, not an exported Fabric deployment definition. Tests check that it matches the notebooks and their parameter cells.
 
 ## Completion Checkpoint
 
@@ -68,3 +68,4 @@ The manifest is a platform-neutral design artifact, not an exported Fabric deplo
 - A forced test failure skips dependent steps and records the error.
 - GitHub Actions runs the end-to-end workflow successfully.
 - The Fabric pipeline is configured with equivalent dependencies and retry behavior.
+- A deliberately failed Fabric run is recorded in `audit.pipeline_runs` with status `Failed`.

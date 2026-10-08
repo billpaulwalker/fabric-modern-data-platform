@@ -34,6 +34,7 @@ bronze_nb = _load_notebook("nb_cre_bronze_ingest.py", "nb_cre_bronze_ingest")
 silver_nb = _load_notebook("nb_cre_silver_transform.py", "nb_cre_silver_transform")
 gold_nb = _load_notebook("nb_cre_gold_build_model.py", "nb_cre_gold_build_model")
 semantic_nb = _load_notebook("nb_cre_gold_validate_model.py", "nb_cre_gold_validate_model")
+log_nb = _load_notebook("nb_cre_gold_log_pipeline_run.py", "nb_cre_gold_log_pipeline_run")
 
 
 @pytest.fixture(scope="module")
@@ -335,17 +336,24 @@ def _run_fabric_chain(spark):
     catalog = FakeCatalogSpark(spark)
     notebooks = [bronze_nb, silver_nb, gold_nb]  # semantic validation only reads
     originals = [notebook.write_table for notebook in notebooks]
+    original_append = log_nb.append_table
     for notebook in notebooks:
         notebook.write_table = catalog.write_table
+    log_nb.append_table = catalog.append_table
     try:
         config_directory = str(REPO_ROOT / "config")
         bronze_nb.main(catalog, pipeline_run_id="test_run", config_directory=config_directory, landing_root=LANDING_ROOT)
         silver_metrics = silver_nb.main(catalog, config_directory=config_directory)
         gold_nb.main(catalog, config_directory=config_directory)
         semantic_report = semantic_nb.main(catalog, config_directory=config_directory)
+        log_nb.main(
+            catalog, pipeline_run_id="test_run", pipeline_name="pl_cre_end_to_end", environment="dev",
+            status="Succeeded", triggered_at="2026-06-20T00:00:00Z", config_directory=config_directory,
+        )
     finally:
         for notebook, original in zip(notebooks, originals):
             notebook.write_table = original
+        log_nb.append_table = original_append
     return {
         "tables": catalog.tables,
         "schemas": catalog.created_schemas,
@@ -367,6 +375,12 @@ class FakeCatalogSpark:
         lakehouse_schema = table_name.rsplit(".", 1)[0]
         assert lakehouse_schema in self.created_schemas, f"{table_name} written before its schema was created"
         self.tables[table_name] = frame.cache()
+
+    def append_table(self, frame, table_name):
+        lakehouse_schema = table_name.rsplit(".", 1)[0]
+        assert lakehouse_schema in self.created_schemas, f"{table_name} appended before its schema was created"
+        existing = self.tables.get(table_name)
+        self.tables[table_name] = (frame if existing is None else existing.unionByName(frame)).cache()
 
     def table(self, table_name):
         if table_name not in self.tables:
@@ -400,6 +414,7 @@ EXPECTED_TABLES = {
     "lh_cre_gold.shared.dim_property", "lh_cre_gold.shared.dim_tenant", "lh_cre_gold.shared.dim_date",
     "lh_cre_gold.leasing.fact_lease", "lh_cre_gold.leasing.fact_rent_payment",
     "lh_cre_gold.finance.fact_property_budget", "lh_cre_gold.operations.fact_maintenance_request",
+    "lh_cre_gold.audit.pipeline_runs",
 }
 
 
@@ -431,7 +446,8 @@ def test_layout_covers_every_configured_table():
     semantic = set(semantic_nb.load_config(REPO_ROOT / "config/semantic_model_config.json")["tables"])
     assert set(layout["bronze"]) == bronze
     assert set(layout["silver"]) == silver | {"rejected_records"}
-    assert set(layout["gold"]) == set(gold_nb.GRAINS) == semantic
+    assert set(gold_nb.GRAINS) == semantic
+    assert set(layout["gold"]) == set(gold_nb.GRAINS) | {"pipeline_runs"}
 
 
 @pytest.fixture(scope="module")
@@ -537,3 +553,53 @@ def test_sample_gold_passes_real_semantic_contract(sample_gold):
     config = semantic_nb.load_config(REPO_ROOT / "config/semantic_model_config.json")
     report = semantic_nb.validate_gold_tables(models, config)
     assert report["issues"] == []
+
+
+# Pipeline run log ---------------------------------------------------------------
+
+def _rows_as_text(frame, *columns):
+    # Format in Spark: collect() converts timestamps to the local machine's time zone.
+    selected = [F.date_format(column, "yyyy-MM-dd HH:mm:ss").alias(column) if column.endswith("_at") else column
+                for column in columns]
+    return [tuple(row) for row in frame.select(*selected).collect()]
+
+
+def test_pipeline_run_id_from_the_pipeline_reaches_every_layer(fabric_run):
+    layout = gold_nb.load_config(LAYOUT_PATH)
+    for layer, name in [("bronze", "leases"), ("silver", "leases"), ("gold", "fact_lease")]:
+        frame = fabric_run["tables"][gold_nb.resolve_table(layout, layer, name)]
+        assert [row[0] for row in frame.select("pipeline_run_id").distinct().collect()] == ["test_run"]
+
+
+def test_successful_run_is_logged_once(fabric_run):
+    runs = fabric_run["tables"]["lh_cre_gold.audit.pipeline_runs"]
+    assert _rows_as_text(runs, "pipeline_run_id", "pipeline_name", "environment", "status", "message", "triggered_at") == [
+        ("test_run", "pl_cre_end_to_end", "dev", "Succeeded", None, "2026-06-20 00:00:00"),
+    ]
+    assert runs.filter(F.col("logged_at").isNull()).count() == 0
+
+
+def test_run_log_appends_each_run(spark):
+    catalog = FakeCatalogSpark(spark)
+    original_append = log_nb.append_table
+    log_nb.append_table = catalog.append_table
+    try:
+        for run_id, status in [("run-1", "Succeeded"), ("run-2", "Failed")]:
+            log_nb.main(
+                catalog, pipeline_run_id=run_id, pipeline_name="pl_cre_end_to_end", environment="test",
+                status=status, triggered_at="2026-06-20T00:00:00Z", message="see Monitor hub" if status == "Failed" else "",
+                config_directory=str(REPO_ROOT / "config"),
+            )
+    finally:
+        log_nb.append_table = original_append
+    runs = catalog.tables["lh_cre_gold.audit.pipeline_runs"]
+    assert sorted(_rows_as_text(runs, "pipeline_run_id", "status", "message")) == [
+        ("run-1", "Succeeded", None), ("run-2", "Failed", "see Monitor hub"),
+    ]
+
+
+def test_run_log_rejects_unknown_status_and_missing_run_id(spark):
+    with pytest.raises(ValueError, match="status"):
+        log_nb.build_run_record(spark, "run-1", "pl_cre_end_to_end", "dev", "Done", "2026-06-20T00:00:00Z", "")
+    with pytest.raises(ValueError, match="pipeline_run_id"):
+        log_nb.build_run_record(spark, "", "pl_cre_end_to_end", "dev", "Succeeded", "2026-06-20T00:00:00Z", "")

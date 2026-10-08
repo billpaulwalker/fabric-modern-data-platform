@@ -12,7 +12,7 @@ Each environment has one workspace containing three schema-enabled Lakehouses, o
 |---|---|---|
 | `lh_cre_bronze` | One per source system: `cre_sql`, `business_files`, `openweather` | Raw landed data with audit columns; landing files and Bronze config |
 | `lh_cre_silver` | One per business domain: `property`, `leasing`, `finance`, `operations`, `environment`, plus `quarantine` | Typed, mapped, validated data; rejected rows |
-| `lh_cre_gold` | `shared` for conformed dimensions, plus `leasing`, `finance`, `operations` for facts | The star schema behind the Direct Lake semantic model |
+| `lh_cre_gold` | `shared` for conformed dimensions, plus `leasing`, `finance`, `operations` for facts, and `audit` for the pipeline run log | The star schema behind the Direct Lake semantic model |
 
 Every table's location is declared once in `config/fabric_layout.json`. The notebooks resolve all table names from it as `lakehouse.schema.table`, so moving a table means editing that file only.
 
@@ -62,7 +62,7 @@ Each Lakehouse holds the config for the notebook that writes into it. Create the
 
 ## 4. Create the Notebooks
 
-Create one notebook per file, named exactly as the file without `.py`, set its **default** Lakehouse as shown, and paste the file's full contents into the first cell. The names follow the project naming standard in `architecture/architecture-overview.md`, so the workspace, the repository, and Git integration later all use the same names.
+Create one notebook per file, named exactly as the file without `.py`, set its **default** Lakehouse as shown, and paste in the file's contents. If the file contains a `# PARAMETERS CELL` marker (only `nb_cre_bronze_ingest` among these four), paste the lines between that marker and `# CELL` into the first cell and mark it as the parameter cell, then paste everything from `# CELL` onward into a second cell; otherwise paste the whole file into one cell. The names follow the project naming standard in `architecture/architecture-overview.md`, so the workspace, the repository, and Git integration later all use the same names.
 
 | Notebook name | Repository file | Default Lakehouse |
 |---|---|---|
@@ -157,6 +157,6 @@ These outlast the trial and belong in the README and portfolio:
 
 ## Next Steps
 
-1. **Data Pipeline:** build `pl_cre_end_to_end` from `pipelines/fabric-pipeline-manifest.json`, passing `pipeline_run_id` to the notebooks and logging failures.
+1. **Data Pipeline:** build `pl_cre_end_to_end` by following `docs/fabric-data-pipeline.md`. It runs the four notebooks in order, passes the pipeline run ID into Bronze, and logs every run to `lh_cre_gold.audit.pipeline_runs`.
 2. **Semantic model and report:** create the Direct Lake model over `lh_cre_gold`, including the `shared`, `leasing`, `finance`, and `operations` schemas, using `docs/phase-5-powerbi-semantic-model.md` and `powerbi/semantic-model/`.
 3. **Git integration and deployment:** connect the workspace to Git, then promote Development → Test → Production with a Fabric deployment pipeline and `deployment/deployment-rules.json`, which binds each notebook to the matching Lakehouse in each stage's workspace.

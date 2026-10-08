@@ -4,6 +4,15 @@
 # and the repository's data/sample and data/api_sample folders to its Files/landing/.
 # Bronze keeps source values raw: CSV columns stay strings and API JSON stays nested.
 
+# PARAMETERS CELL ********************
+# In Fabric, put this line in its own first cell and mark it as the parameter cell.
+# pl_cre_end_to_end passes @pipeline().RunId; Silver and Gold carry it forward from the Bronze rows.
+# Left empty, as in a manual run, the notebook generates its own run ID.
+
+pipeline_run_id = ""
+
+# CELL ********************
+
 from datetime import datetime, timezone
 import json
 
@@ -113,4 +122,4 @@ def main(spark, pipeline_run_id=None, config_directory: str = CONFIG_DIRECTORY, 
 
 
 if __name__ == "__main__":
-    display(spark.createDataFrame(main(spark)))  # noqa: F821 - spark and display are Fabric notebook globals
+    display(spark.createDataFrame(main(spark, pipeline_run_id=pipeline_run_id or None)))  # noqa: F821 - spark and display are Fabric notebook globals

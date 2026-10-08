@@ -33,7 +33,8 @@
       "fact_lease": "leasing.fact_lease",
       "fact_rent_payment": "leasing.fact_rent_payment",
       "fact_property_budget": "finance.fact_property_budget",
-      "fact_maintenance_request": "operations.fact_maintenance_request"
+      "fact_maintenance_request": "operations.fact_maintenance_request",
+      "pipeline_runs": "audit.pipeline_runs"
     }
   }
 }
