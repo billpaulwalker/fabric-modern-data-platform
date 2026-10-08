@@ -1,3 +1,3 @@
 -r requirements.txt
-# Local tests for notebooks/fabric; matches Fabric Runtime 1.3 (Spark 3.5). Requires Java 17.
-pyspark==3.5.3
+# Local tests for notebooks/fabric; matches Fabric Runtime 2.0 (Spark 4.1). Requires Java 17 or 21.
+pyspark==4.1.3

@@ -406,4 +406,4 @@ Generated releases are written to `dist/` and should not be committed.
 
 ## Project Status
 
-All seven repository phases are implemented, and the full Fabric notebook chain (Bronze, Silver, Gold, semantic validation) is tested locally on Spark 3.5. The current milestone is running that chain in a Fabric Development workspace by following `docs/fabric-getting-started.md`, then building the Data Pipeline, Direct Lake semantic model and report, and Dev/Test/Prod deployment, and capturing portfolio screenshots.
+All seven repository phases are implemented. The full Fabric notebook chain (Bronze, Silver, Gold, semantic validation) runs in the Fabric Development workspace on Runtime 2.0 (Spark 4.1) and is tested locally on the same Spark version, with ANSI mode both on and off. The next milestones are the Data Pipeline, the Direct Lake semantic model and report, and Dev/Test/Prod deployment, followed by portfolio screenshots.

@@ -73,7 +73,7 @@ def validate_gold_tables(tables: dict, config: dict) -> dict:
             )
         for column in table_config.get("non_empty_columns", []):
             non_zero = (
-                _has_rows(frame.filter(F.coalesce(F.col(column).cast("double"), F.lit(0.0)) != 0))
+                _has_rows(frame.filter(F.coalesce(F.col(column).try_cast("double"), F.lit(0.0)) != 0))
                 if column in frame.columns else False
             )
             report.check(

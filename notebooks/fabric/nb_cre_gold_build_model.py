@@ -56,14 +56,14 @@ def stable_key(namespace: str, columns: list):
 def date_key(frame: DataFrame, column: str):
     if column not in frame.columns:
         return F.lit(None).cast("long")
-    return F.date_format(F.to_date(F.col(column)), "yyyyMMdd").cast("long")
+    return F.date_format(F.col(column).try_cast("date"), "yyyyMMdd").cast("long")
 
 
 def measure(frame: DataFrame, column: str):
     """Missing values read as zero; a column absent from the source stays null rather than reading as zero."""
     if column not in frame.columns:
         return F.lit(None).cast("decimal(18,2)")
-    return F.coalesce(F.col(column).cast("decimal(18,2)"), F.lit(0).cast("decimal(18,2)"))
+    return F.coalesce(F.col(column).try_cast("decimal(18,2)"), F.lit(0).cast("decimal(18,2)"))
 
 
 def add_unknown_member(frame: DataFrame, key_column: str, business_key: str, label_column: str) -> DataFrame:
@@ -210,7 +210,7 @@ def build_fact_maintenance(maintenance: DataFrame, dim_property: DataFrame) -> D
             frame = frame.withColumnRenamed(status_source, "status")
     frame = lookup_key(frame, dim_property, "property_id", "property_key")
     resolution_days = (
-        F.datediff(F.to_date("completed_date"), F.to_date("request_date"))
+        F.datediff(F.col("completed_date").try_cast("date"), F.col("request_date").try_cast("date"))
         if "completed_date" in frame.columns and "request_date" in frame.columns
         else F.lit(None).cast("int")
     )
@@ -254,20 +254,21 @@ def build_fact_property_budget(budget: DataFrame, dim_property: DataFrame) -> Da
         (column for column in ["budget_period", "budget_date", "period_start", "month_start"] if column in frame.columns),
         None,
     )
-    period_date = F.to_date(F.col(period_column)) if period_column else F.lit(None).cast("date")
+    period_date = F.col(period_column).try_cast("date") if period_column else F.lit(None).cast("date")
     if "budget_month" in frame.columns:
         parsed_month_date = F.coalesce(
-            F.to_date(F.col("budget_month")),
-            F.to_date(F.concat(F.col("budget_month").cast("string"), F.lit("-01"))),
+            F.col("budget_month").try_cast("date"),
+            F.concat(F.col("budget_month").cast("string"), F.lit("-01")).try_cast("date"),
         )
-        numeric_month = F.col("budget_month").cast("int")
+        # budget_month may be a month number or a date; try_cast keeps either form safe under ANSI mode.
+        numeric_month = F.col("budget_month").try_cast("int")
         month = F.when(numeric_month.between(1, 12), numeric_month).otherwise(F.month(parsed_month_date))
     else:
         parsed_month_date = F.lit(None).cast("date")
         month = F.month(period_date)
     year_candidates = [F.year(period_date), F.year(parsed_month_date)]
     if "budget_year" in frame.columns:
-        year_candidates.insert(0, F.col("budget_year").cast("int"))
+        year_candidates.insert(0, F.col("budget_year").try_cast("int"))
 
     frame = (
         frame.withColumn("budget_year", F.coalesce(*year_candidates))

@@ -109,8 +109,8 @@ def apply_derived_columns(frame: DataFrame, derivations: dict) -> DataFrame:
         missing = [column for column in inputs if column not in frame.columns]
         if missing:
             raise ValueError(f"Cannot derive {target}; missing input columns: {missing}")
-        product = reduce(lambda left, right: left * right, [F.col(column).cast("decimal(18,6)") for column in inputs])
-        frame = frame.withColumn(target, product.cast("decimal(18,2)"))
+        product = reduce(lambda left, right: left * right, [F.col(column).try_cast("decimal(18,6)") for column in inputs])
+        frame = frame.withColumn(target, product.try_cast("decimal(18,2)"))
     return frame
 
 
@@ -161,7 +161,9 @@ def transform_table(frame: DataFrame, config: dict) -> tuple:
         if column not in frame.columns:
             continue
         original = F.col(column)
-        converted = F.trim(original) if type_name == "string" else original.cast(spark_type(type_name))
+        # try_cast returns null for malformed values whether or not ANSI mode is on, so they are
+        # quarantined below instead of failing the run (Spark 4 enables ANSI mode by default).
+        converted = F.trim(original) if type_name == "string" else original.try_cast(spark_type(type_name))
         frame = checks.add(
             frame, original.isNotNull() & converted.isNull(), f"invalid_{type_name}:{column}"
         ).withColumn(column, converted)
@@ -178,7 +180,7 @@ def transform_table(frame: DataFrame, config: dict) -> tuple:
             frame = checks.add(frame, invalid, f"invalid_value:{column}")
     for column in [snake_case(column) for column in config.get("non_negative_columns", [])]:
         if column in frame.columns:
-            frame = checks.add(frame, F.col(column).cast("double") < 0, f"negative_value:{column}")
+            frame = checks.add(frame, F.col(column).try_cast("double") < 0, f"negative_value:{column}")
     for start, end in config.get("date_order_rules", []):
         start, end = snake_case(start), snake_case(end)
         if start in frame.columns and end in frame.columns:

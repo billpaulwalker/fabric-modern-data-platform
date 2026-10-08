@@ -45,6 +45,8 @@ def spark():
         .config("spark.ui.enabled", "false")
         .config("spark.sql.shuffle.partitions", "1")
         .config("spark.sql.session.timeZone", "UTC")
+        # Spark 4's default, stated explicitly: malformed casts raise unless the code uses try_cast.
+        .config("spark.sql.ansi.enabled", "true")
         .getOrCreate()
     )
     session.sparkContext.setLogLevel("ERROR")
@@ -307,6 +309,24 @@ def test_gold_duplicate_grain_is_rejected(csv_frame):
 
 @pytest.fixture(scope="module")
 def fabric_run(spark):
+    return _run_fabric_chain(spark)
+
+
+def test_full_chain_gives_identical_results_with_ansi_mode_off(spark, fabric_run):
+    # The Fabric Runtime 2.0 workspace ran this sample with ANSI mode off; the suite runs it on.
+    spark.conf.set("spark.sql.ansi.enabled", "false")
+    try:
+        ansi_off = _run_fabric_chain(spark)
+    finally:
+        spark.conf.set("spark.sql.ansi.enabled", "true")
+    assert ansi_off["semantic_report"]["issues"] == []
+    assert ansi_off["silver_metrics"] == fabric_run["silver_metrics"]
+    assert {name: frame.count() for name, frame in ansi_off["tables"].items()} == {
+        name: frame.count() for name, frame in fabric_run["tables"].items()
+    }
+
+
+def _run_fabric_chain(spark):
     """Run every notebook's main() in order against an in-memory catalog.
 
     Each notebook reads only what the previous one wrote, by the qualified names it
