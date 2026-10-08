@@ -13,40 +13,48 @@
       "depends_on": [],
       "base_parameters": {"pipeline_run_id": "@pipeline().RunId"},
       "retry": 1,
+      "retry_interval_seconds": 120,
+      "session_tag": "cre_pipeline",
       "timeout_minutes": 30
     },
     {
       "name": "nb_cre_silver_transform",
       "type": "Notebook",
       "notebook": "notebooks/fabric/nb_cre_silver_transform.py",
-      "default_lakehouse": "lh_cre_silver",
+      "default_lakehouse": "lh_cre_bronze",
       "depends_on": [{"activity": "nb_cre_bronze_ingest", "conditions": ["Succeeded"]}],
-      "retry": 0,
+      "retry": 1,
+      "retry_interval_seconds": 120,
+      "session_tag": "cre_pipeline",
       "timeout_minutes": 45
     },
     {
       "name": "nb_cre_gold_build_model",
       "type": "Notebook",
       "notebook": "notebooks/fabric/nb_cre_gold_build_model.py",
-      "default_lakehouse": "lh_cre_gold",
+      "default_lakehouse": "lh_cre_bronze",
       "depends_on": [{"activity": "nb_cre_silver_transform", "conditions": ["Succeeded"]}],
-      "retry": 0,
+      "retry": 1,
+      "retry_interval_seconds": 120,
+      "session_tag": "cre_pipeline",
       "timeout_minutes": 45
     },
     {
       "name": "nb_cre_gold_validate_model",
       "type": "Notebook",
       "notebook": "notebooks/fabric/nb_cre_gold_validate_model.py",
-      "default_lakehouse": "lh_cre_gold",
+      "default_lakehouse": "lh_cre_bronze",
       "depends_on": [{"activity": "nb_cre_gold_build_model", "conditions": ["Succeeded"]}],
-      "retry": 0,
+      "retry": 1,
+      "retry_interval_seconds": 120,
+      "session_tag": "cre_pipeline",
       "timeout_minutes": 15
     },
     {
       "name": "log_run_succeeded",
       "type": "Notebook",
       "notebook": "notebooks/fabric/nb_cre_gold_log_pipeline_run.py",
-      "default_lakehouse": "lh_cre_gold",
+      "default_lakehouse": "lh_cre_bronze",
       "depends_on": [{"activity": "nb_cre_gold_validate_model", "conditions": ["Succeeded"]}],
       "base_parameters": {
         "pipeline_run_id": "@pipeline().RunId",
@@ -56,13 +64,15 @@
         "triggered_at": "@string(pipeline().TriggerTime)"
       },
       "retry": 1,
+      "retry_interval_seconds": 120,
+      "session_tag": "cre_pipeline",
       "timeout_minutes": 10
     },
     {
       "name": "log_run_failed",
       "type": "Notebook",
       "notebook": "notebooks/fabric/nb_cre_gold_log_pipeline_run.py",
-      "default_lakehouse": "lh_cre_gold",
+      "default_lakehouse": "lh_cre_bronze",
       "depends_on": [{"activity": "nb_cre_gold_validate_model", "conditions": ["Failed", "Skipped"]}],
       "base_parameters": {
         "pipeline_run_id": "@pipeline().RunId",
@@ -73,6 +83,8 @@
         "message": "One or more activities failed or were skipped; see this run in the Monitor hub."
       },
       "retry": 1,
+      "retry_interval_seconds": 120,
+      "session_tag": "cre_pipeline",
       "timeout_minutes": 10
     }
   ]

@@ -1,7 +1,8 @@
 # Fabric notebook source
-# Default Lakehouse: lh_cre_silver (schema-enabled). Reads lh_cre_bronze; writes one schema per domain.
-# Upload config/fabric_layout.json and config/silver_table_config.json to its Files/config/;
-# the table config is the same contract the local pandas pipeline uses.
+# Default Lakehouse: lh_cre_bronze, shared by every pipeline notebook so a run reuses one Spark session;
+# its Files/config/ holds all config. Tables are read and written by full lakehouse.schema.table name.
+# Reads lh_cre_bronze; writes lh_cre_silver, one schema per domain. Needs config/fabric_layout.json and
+# config/silver_table_config.json, the same contract the local pandas pipeline uses.
 
 from functools import reduce
 import json

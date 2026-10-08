@@ -1,5 +1,5 @@
 {
-  "lakehouse_binding_note": "Lakehouse names are identical in every stage (config/fabric_layout.json); each rule binds the item to the lakehouse of that name in the stage's own workspace.",
+  "lakehouse_binding_note": "Lakehouse names are identical in every stage (config/fabric_layout.json); each rule binds the item to the lakehouse of that name in the stage's own workspace. Every pipeline notebook defaults to lh_cre_bronze so the run shares one Spark session; tables are addressed by full name.",
   "rules": [
     {
       "artifact": "pl_cre_end_to_end",
@@ -18,30 +18,30 @@
     {
       "artifact": "nb_cre_silver_transform",
       "property": "default_lakehouse",
-      "dev": "ws-cre-modernization-dev/lh_cre_silver",
-      "test": "ws-cre-modernization-test/lh_cre_silver",
-      "prod": "ws-cre-modernization-prod/lh_cre_silver"
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze"
     },
     {
       "artifact": "nb_cre_gold_build_model",
       "property": "default_lakehouse",
-      "dev": "ws-cre-modernization-dev/lh_cre_gold",
-      "test": "ws-cre-modernization-test/lh_cre_gold",
-      "prod": "ws-cre-modernization-prod/lh_cre_gold"
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze"
     },
     {
       "artifact": "nb_cre_gold_validate_model",
       "property": "default_lakehouse",
-      "dev": "ws-cre-modernization-dev/lh_cre_gold",
-      "test": "ws-cre-modernization-test/lh_cre_gold",
-      "prod": "ws-cre-modernization-prod/lh_cre_gold"
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze"
     },
     {
       "artifact": "nb_cre_gold_log_pipeline_run",
       "property": "default_lakehouse",
-      "dev": "ws-cre-modernization-dev/lh_cre_gold",
-      "test": "ws-cre-modernization-test/lh_cre_gold",
-      "prod": "ws-cre-modernization-prod/lh_cre_gold"
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze"
     },
     {
       "artifact": "CRE Portfolio Analytics",

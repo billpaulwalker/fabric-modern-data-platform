@@ -10,7 +10,7 @@ Each environment has one workspace containing three schema-enabled Lakehouses, o
 
 | Lakehouse | Schemas | Purpose |
 |---|---|---|
-| `lh_cre_bronze` | One per source system: `cre_sql`, `business_files`, `openweather` | Raw landed data with audit columns; landing files and Bronze config |
+| `lh_cre_bronze` | One per source system: `cre_sql`, `business_files`, `openweather` | Raw landed data with audit columns; landing files and all config; default Lakehouse for every notebook |
 | `lh_cre_silver` | One per business domain: `property`, `leasing`, `finance`, `operations`, `environment`, plus `quarantine` | Typed, mapped, validated data; rejected rows |
 | `lh_cre_gold` | `shared` for conformed dimensions, plus `leasing`, `finance`, `operations` for facts, and `audit` for the pipeline run log | The star schema behind the Direct Lake semantic model |
 
@@ -48,30 +48,28 @@ Enable **Lakehouse schemas** when creating each one. The notebooks create their 
 
 ## 3. Upload Configuration and Landing Files
 
-Each Lakehouse holds the config for the notebook that writes into it. Create these folders under **Files** in each Lakehouse explorer and upload from your local clone:
+All uploads go to `lh_cre_bronze`, the default Lakehouse every notebook shares. Create these folders under **Files** in its explorer and upload from your local clone:
 
-| Lakehouse | Upload from the repository | To |
-|---|---|---|
-| `lh_cre_bronze` | `config/fabric_layout.json`, `config/bronze_source_config.json` | `Files/config/` |
-| `lh_cre_bronze` | `data/sample/` (folder) | `Files/landing/sample/` |
-| `lh_cre_bronze` | `data/api_sample/` (folder) | `Files/landing/api_sample/` |
-| `lh_cre_silver` | `config/fabric_layout.json`, `config/silver_table_config.json` | `Files/config/` |
-| `lh_cre_gold` | `config/fabric_layout.json`, `config/gold_model_config.json`, `config/semantic_model_config.json` | `Files/config/` |
+| Upload from the repository | To `lh_cre_bronze` |
+|---|---|
+| `config/fabric_layout.json`, `config/bronze_source_config.json`, `config/silver_table_config.json`, `config/gold_model_config.json`, `config/semantic_model_config.json` | `Files/config/` |
+| `data/sample/` (folder) | `Files/landing/sample/` |
+| `data/api_sample/` (folder) | `Files/landing/api_sample/` |
 
-`fabric_layout.json` goes into all three, because every notebook resolves table names from it. When you change a config file in the repository, upload it again to each Lakehouse that holds it.
+When you change a config file in the repository, upload it again. `lh_cre_silver` and `lh_cre_gold` hold only tables.
 
 ## 4. Create the Notebooks
 
-Create one notebook per file, named exactly as the file without `.py`, set its **default** Lakehouse as shown, and paste in the file's contents. If the file contains a `# PARAMETERS CELL` marker (only `nb_cre_bronze_ingest` among these four), paste the lines between that marker and `# CELL` into the first cell and mark it as the parameter cell, then paste everything from `# CELL` onward into a second cell; otherwise paste the whole file into one cell. The names follow the project naming standard in `architecture/architecture-overview.md`, so the workspace, the repository, and Git integration later all use the same names.
+Create one notebook per file, named exactly as the file without `.py`, set `lh_cre_bronze` as its **default** Lakehouse, and paste in the file's contents. If the file contains a `# PARAMETERS CELL` marker (only `nb_cre_bronze_ingest` among these four), paste the lines between that marker and `# CELL` into the first cell and mark it as the parameter cell, then paste everything from `# CELL` onward into a second cell; otherwise paste the whole file into one cell. The names follow the project naming standard in `architecture/architecture-overview.md`, so the workspace, the repository, and Git integration later all use the same names.
 
-| Notebook name | Repository file | Default Lakehouse |
+| Notebook name | Repository file | Writes to |
 |---|---|---|
 | `nb_cre_bronze_ingest` | `notebooks/fabric/nb_cre_bronze_ingest.py` | `lh_cre_bronze` |
 | `nb_cre_silver_transform` | `notebooks/fabric/nb_cre_silver_transform.py` | `lh_cre_silver` |
 | `nb_cre_gold_build_model` | `notebooks/fabric/nb_cre_gold_build_model.py` | `lh_cre_gold` |
-| `nb_cre_gold_validate_model` | `notebooks/fabric/nb_cre_gold_validate_model.py` | `lh_cre_gold` |
+| `nb_cre_gold_validate_model` | `notebooks/fabric/nb_cre_gold_validate_model.py` | Reads `lh_cre_gold` only |
 
-Each notebook's default Lakehouse is the one it writes to. It reads its config from `/lakehouse/default/Files/config`, and the Bronze notebook reads landing files from `Files/landing`. Tables in other Lakehouses are read by their full `lakehouse.schema.table` name.
+Every notebook uses `lh_cre_bronze` as its default Lakehouse, whichever layer it writes. The default Lakehouse only decides where config (`/lakehouse/default/Files/config`) and landing files (`Files/landing`) are read from; every table is read and written by its full `lakehouse.schema.table` name. Sharing one default Lakehouse matters in the pipeline: Fabric reuses a Spark session only between notebooks with the same default Lakehouse, and a new session per layer can exceed a trial capacity's Spark limit.
 
 Each file runs its work under `if __name__ == "__main__":`, which is true inside a Fabric notebook. The same files are imported by `tests/test_fabric_notebooks.py`, which runs all four notebooks in order against the sample data on a local Spark session and checks that every table lands where `fabric_layout.json` says.
 
@@ -146,12 +144,12 @@ These outlast the trial and belong in the README and portfolio:
 
 | Symptom | Cause and fix |
 |---|---|
-| `FileNotFoundError: ... /lakehouse/default/Files/config/...` | The config wasn't uploaded to that notebook's default Lakehouse, or the default Lakehouse is wrong. Check the tables in steps 3 and 4. |
+| `FileNotFoundError: ... /lakehouse/default/Files/config/...` | The notebook's default Lakehouse isn't `lh_cre_bronze` (a new notebook has none until you add one), or the config wasn't uploaded to `lh_cre_bronze` `Files/config/`. Check steps 3 and 4. |
 | `FileNotFoundError: Landing file not found ...` | Upload the named file to the `Files/landing/` path in `lh_cre_bronze`. |
 | Errors creating or writing to a schema | The Lakehouse was created without schemas. Create a new schema-enabled Lakehouse with the same name and upload again. |
 | A table or schema name is rejected, or a table in another Lakehouse isn't found | First check that the Lakehouse names match `config/fabric_layout.json` exactly. If they do, add the other Lakehouse to the notebook's explorer (it can stay non-default) and rerun. If it still fails, the name format needs adjusting: it is built in `resolve_table` and `create_schema_for` in each notebook. Capture the error message. |
 | `Configured columns are absent from Bronze` | A source column was renamed or removed. Update `column_mappings` in `config/silver_table_config.json` and upload it again. |
-| `... is not declared in fabric_layout.json` | A config names a table the layout doesn't place. Add it to `config/fabric_layout.json` and upload it to all three Lakehouses. |
+| `... is not declared in fabric_layout.json` | A config names a table the layout doesn't place. Add it to `config/fabric_layout.json` and upload it to `lh_cre_bronze` again. |
 | `Semantic model validation failed` | The listed issues name the table, column, or relationship. Fix the source or mapping, then rerun from the failing layer. |
 | A notebook runs old logic | Notebooks are pasted copies until Git integration is set up. Paste the current file from the repository again. |
 

@@ -65,8 +65,8 @@ rows_read = rows_valid + rows_rejected + duplicate_rows_removed
 ## Fabric Execution
 
 1. Ensure Phase 2 data exists in `lh_cre_bronze`.
-2. Upload `config/fabric_layout.json` and `config/silver_table_config.json` to `lh_cre_silver` at `Files/config/`. The notebook reads the same contract, including `column_mappings` and `derived_columns`, as the local pipeline, and fails before writing if a configured column is absent from Bronze.
-3. Create a Fabric notebook from `notebooks/fabric/nb_cre_silver_transform.py` with `lh_cre_silver` as its default Lakehouse.
+2. Upload `config/fabric_layout.json` and `config/silver_table_config.json` to `lh_cre_bronze` at `Files/config/`, where every notebook reads config. The notebook reads the same contract, including `column_mappings` and `derived_columns`, as the local pipeline, and fails before writing if a configured column is absent from Bronze.
+3. Create a Fabric notebook from `notebooks/fabric/nb_cre_silver_transform.py` with `lh_cre_bronze` as its default Lakehouse. It writes to `lh_cre_silver` by full table name.
 4. Run all cells. The notebook reads Bronze tables from `lh_cre_bronze` by their full names.
 5. Confirm Delta tables in the `property`, `leasing`, `finance`, `operations`, and `environment` schemas.
 6. Review `quarantine.rejected_records`.

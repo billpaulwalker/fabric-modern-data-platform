@@ -1,7 +1,8 @@
 # Fabric notebook source
-# Default Lakehouse: lh_cre_gold (schema-enabled). Appends one row per pipeline run to audit.pipeline_runs,
-# so pipeline health is available to the Direct Lake model alongside the Gold tables.
-# Upload config/fabric_layout.json to its Files/config/.
+# Default Lakehouse: lh_cre_bronze, shared by every pipeline notebook so a run reuses one Spark session;
+# its Files/config/ holds all config. Tables are read and written by full lakehouse.schema.table name.
+# Appends one row per pipeline run to lh_cre_gold.audit.pipeline_runs, so pipeline health is available
+# to the Direct Lake model alongside the Gold tables. Needs config/fabric_layout.json.
 # pl_cre_end_to_end calls this twice: with status Succeeded after validation succeeds, and with status
 # Failed when validation fails or is skipped, which happens whenever any earlier activity fails.
 

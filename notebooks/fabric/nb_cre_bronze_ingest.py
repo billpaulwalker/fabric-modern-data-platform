@@ -1,7 +1,8 @@
 # Fabric notebook source
-# Default Lakehouse: lh_cre_bronze (schema-enabled). Writes one schema per source system.
-# Upload config/fabric_layout.json and config/bronze_source_config.json to its Files/config/,
-# and the repository's data/sample and data/api_sample folders to its Files/landing/.
+# Default Lakehouse: lh_cre_bronze, shared by every pipeline notebook so a run reuses one Spark session;
+# its Files/config/ holds all config. Tables are read and written by full lakehouse.schema.table name.
+# Writes lh_cre_bronze, one schema per source system. Needs config/fabric_layout.json and
+# config/bronze_source_config.json in Files/config/, and data/sample and data/api_sample in Files/landing/.
 # Bronze keeps source values raw: CSV columns stay strings and API JSON stays nested.
 
 # PARAMETERS CELL ********************

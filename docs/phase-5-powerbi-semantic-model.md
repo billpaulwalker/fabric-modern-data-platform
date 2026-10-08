@@ -60,8 +60,8 @@ The validation fails when a fact's measure columns are all zero or null (`non_em
 ## Fabric Execution
 
 1. Run the Gold notebook so the `lh_cre_gold` tables are current.
-2. Upload `config/fabric_layout.json` and `config/semantic_model_config.json` to `lh_cre_gold` at `Files/config/`.
-3. Create a notebook from `notebooks/fabric/nb_cre_gold_validate_model.py` with `lh_cre_gold` as its default Lakehouse.
+2. Upload `config/fabric_layout.json` and `config/semantic_model_config.json` to `lh_cre_bronze` at `Files/config/`, where every notebook reads config.
+3. Create a notebook from `notebooks/fabric/nb_cre_gold_validate_model.py` with `lh_cre_bronze` as its default Lakehouse. It reads the `lh_cre_gold` tables by full name.
 4. Run all cells. The notebook applies the same contract as the local validation to the Gold tables and raises an error if any check fails, which stops the pipeline before the semantic model is refreshed.
 5. DAX measure names are checked in repository CI, where `powerbi/semantic-model/measures.dax` lives.
 

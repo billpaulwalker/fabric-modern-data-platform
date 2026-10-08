@@ -1,6 +1,7 @@
 # Fabric notebook source
-# Default Lakehouse: lh_cre_gold (schema-enabled). Reads the Gold tables only.
-# Upload config/fabric_layout.json and config/semantic_model_config.json to its Files/config/.
+# Default Lakehouse: lh_cre_bronze, shared by every pipeline notebook so a run reuses one Spark session;
+# its Files/config/ holds all config. Tables are read and written by full lakehouse.schema.table name.
+# Reads the lh_cre_gold tables only. Needs config/fabric_layout.json and config/semantic_model_config.json.
 # Run after the Gold notebook; a failure here should stop the semantic-model refresh.
 # DAX measure names are validated in repository CI, where the measures file lives.
 

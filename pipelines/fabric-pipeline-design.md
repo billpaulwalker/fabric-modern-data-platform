@@ -6,16 +6,28 @@
 
 ## Activities
 
-| Activity | Notebook | Default Lakehouse | Runs when | Retry |
-|---|---|---|---|---|
-| `nb_cre_bronze_ingest` | `nb_cre_bronze_ingest` | `lh_cre_bronze` | Pipeline starts | 1 |
-| `nb_cre_silver_transform` | `nb_cre_silver_transform` | `lh_cre_silver` | Bronze succeeded | 0 |
-| `nb_cre_gold_build_model` | `nb_cre_gold_build_model` | `lh_cre_gold` | Silver succeeded | 0 |
-| `nb_cre_gold_validate_model` | `nb_cre_gold_validate_model` | `lh_cre_gold` | Gold succeeded | 0 |
-| `log_run_succeeded` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Validation succeeded | 1 |
-| `log_run_failed` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Validation failed **or** was skipped | 1 |
+| Activity | Notebook | Writes to | Runs when |
+|---|---|---|---|
+| `nb_cre_bronze_ingest` | `nb_cre_bronze_ingest` | `lh_cre_bronze` | Pipeline starts |
+| `nb_cre_silver_transform` | `nb_cre_silver_transform` | `lh_cre_silver` | Bronze succeeded |
+| `nb_cre_gold_build_model` | `nb_cre_gold_build_model` | `lh_cre_gold` | Silver succeeded |
+| `nb_cre_gold_validate_model` | `nb_cre_gold_validate_model` | (reads `lh_cre_gold`) | Gold succeeded |
+| `log_run_succeeded` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Validation succeeded |
+| `log_run_failed` | `nb_cre_gold_log_pipeline_run` | `lh_cre_gold` | Validation failed **or** was skipped |
 
-Medallion activities are named after the notebook they run. Bronze gets one retry because it reads external sources; the later layers read only Lakehouse data, so a failure there points to a data or contract problem that a retry won't fix.
+Medallion activities are named after the notebook they run.
+
+## Retries and Spark Sessions
+
+Every activity retries once after 120 seconds. The failures a retry fixes are transient: Spark session start-up errors, and a capacity with no free compute rejecting the job (HTTP 430, `TooManyRequestsForCapacity`), which can happen whenever the capacity is busy. A retry is safe because the medallion notebooks replace their tables, so rerunning never duplicates business data; at worst, a log activity that failed after writing its row logs the run twice. A genuine data or contract failure fails the retry the same way, about two minutes later.
+
+## One Spark Session per Run
+
+Every notebook uses `lh_cre_bronze` as its default Lakehouse and every activity carries the session tag `cre_pipeline`. With high concurrency for pipelines enabled, Fabric reuses a Spark session only between notebooks with the same default Lakehouse and session tag, so the whole run shares one session.
+
+This was learned in the first Fabric runs. With each notebook defaulting to the Lakehouse it writes, every layer boundary (Bronze to Silver, Silver to Gold) needed a new session while the previous one still held compute, and the trial capacity rejected the new session with HTTP 430. Each first attempt failed and the retry two minutes later succeeded; activities that kept the same default Lakehouse never failed.
+
+The default Lakehouse now only supplies config and landing files. Every table is addressed by its full `lakehouse.schema.table` name from `config/fabric_layout.json`, so the shared default changes nothing about where data is written. The workspace Starter Pool is also capped at two nodes; see step 1 of `docs/fabric-data-pipeline.md`.
 
 ## Run Logging
 

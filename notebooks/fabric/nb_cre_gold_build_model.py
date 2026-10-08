@@ -1,7 +1,8 @@
 # Fabric notebook source
-# Default Lakehouse: lh_cre_gold (schema-enabled). Reads lh_cre_silver; writes conformed
-# dimensions to the shared schema and facts to their domain schemas.
-# Upload config/fabric_layout.json and config/gold_model_config.json to its Files/config/.
+# Default Lakehouse: lh_cre_bronze, shared by every pipeline notebook so a run reuses one Spark session;
+# its Files/config/ holds all config. Tables are read and written by full lakehouse.schema.table name.
+# Reads lh_cre_silver; writes lh_cre_gold, conformed dimensions to the shared schema and facts to
+# their domain schemas. Needs config/fabric_layout.json and config/gold_model_config.json.
 
 from functools import reduce
 import json

@@ -11,6 +11,7 @@ MEDALLION_CHAIN = [
     "nb_cre_bronze_ingest", "nb_cre_silver_transform", "nb_cre_gold_build_model", "nb_cre_gold_validate_model",
 ]
 VALID_CONDITIONS = {"Succeeded", "Failed", "Skipped", "Completed"}
+SHARED_DEFAULT_LAKEHOUSE = "lh_cre_bronze"
 
 
 def _load(relative_path):
@@ -48,6 +49,22 @@ def test_pipeline_logs_every_run_exactly_once():
         assert activity["base_parameters"]["pipeline_run_id"] == "@pipeline().RunId"
 
 
+def test_every_notebook_activity_retries_once_and_shares_one_session():
+    # Capacity throttling (HTTP 430) is transient, and every notebook overwrites or appends idempotently,
+    # so one delayed retry is safe. A shared session tag lets high concurrency mode reuse one Spark session.
+    for activity in _activities().values():
+        assert activity["retry"] == 1, activity["name"]
+        assert activity["retry_interval_seconds"] == 120, activity["name"]
+        assert activity["session_tag"] == "cre_pipeline", activity["name"]
+
+
+def test_every_pipeline_notebook_shares_one_default_lakehouse():
+    # High concurrency reuses a Spark session only between notebooks with the same default lakehouse.
+    # A change of default lakehouse forces a new session while the previous one still holds compute,
+    # which a trial capacity rejects (HTTP 430). Tables are always addressed by their full names.
+    assert {activity["default_lakehouse"] for activity in _activities().values()} == {SHARED_DEFAULT_LAKEHOUSE}
+
+
 def test_pipeline_dependencies_and_notebooks_exist():
     activities = _activities()
     for activity in activities.values():
@@ -70,5 +87,8 @@ def test_pipeline_parameters_match_notebook_parameter_cells():
 
 def test_deployment_rules_bind_every_fabric_notebook():
     rules = _load("deployment/deployment-rules.json")["rules"]
-    bound = {rule["artifact"] for rule in rules if rule["property"] == "default_lakehouse"}
-    assert bound == FABRIC_NOTEBOOKS
+    lakehouse_rules = [rule for rule in rules if rule["property"] == "default_lakehouse"]
+    assert {rule["artifact"] for rule in lakehouse_rules} == FABRIC_NOTEBOOKS
+    for rule in lakehouse_rules:
+        for stage in ["dev", "test", "prod"]:
+            assert rule[stage] == f"ws-cre-modernization-{stage}/{SHARED_DEFAULT_LAKEHOUSE}", rule["artifact"]
