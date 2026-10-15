@@ -1,0 +1,6 @@
+request_id,property_id,tenant_id,request_category,priority,request_status,opened_date,closed_date,estimated_cost,updated_at
+5001,101,201,HVAC,Medium,Closed,2026-01-12,2026-01-15,1250.0,2026-01-15T14:00:00
+5002,102,203,Plumbing,High,Closed,2026-02-03,2026-02-04,890.0,2026-02-04T16:00:00
+5003,104,205,Roof,High,Open,2026-03-19,,7200.0,2026-06-01T08:30:00
+5004,105,204,Electrical,Medium,In Progress,2026-04-22,,2100.0,2026-06-01T08:45:00
+5005,103,206,Janitorial,Low,Closed,2026-05-08,2026-05-08,300.0,2026-05-08T11:00:00

@@ -1,0 +1,32 @@
+{
+  "name": "CRE Portfolio",
+  "dataColors": ["#1B5E4B", "#2F6B9A", "#D6A84B", "#B84A4A", "#6F7F52", "#665191"],
+  "background": "#FFFFFF",
+  "foreground": "#202428",
+  "tableAccent": "#1B5E4B",
+  "good": "#237A57",
+  "neutral": "#D6A84B",
+  "bad": "#B84A4A",
+  "textClasses": {
+    "callout": {"fontFace": "Segoe UI Semibold", "fontSize": 24, "color": "#202428"},
+    "title": {"fontFace": "Segoe UI Semibold", "fontSize": 12, "color": "#202428"},
+    "header": {"fontFace": "Segoe UI Semibold", "fontSize": 11, "color": "#202428"},
+    "label": {"fontFace": "Segoe UI", "fontSize": 10, "color": "#4A5560"}
+  },
+  "visualStyles": {
+    "page": {
+      "*": {
+        "background": [{"color": {"solid": {"color": "#F3F5F7"}}, "transparency": 0}],
+        "outspace": [{"color": {"solid": {"color": "#F3F5F7"}}, "transparency": 0}]
+      }
+    },
+    "*": {
+      "*": {
+        "title": [{"fontSize": 12, "fontFamily": "Segoe UI Semibold", "color": {"solid": {"color": "#202428"}}}],
+        "subTitle": [{"fontSize": 10, "fontFamily": "Segoe UI", "color": {"solid": {"color": "#6B7580"}}}],
+        "background": [{"show": true, "color": {"solid": {"color": "#FFFFFF"}}, "transparency": 0}],
+        "border": [{"show": true, "color": {"solid": {"color": "#FFFFFF"}}, "radius": 10}]
+      }
+    }
+  }
+}

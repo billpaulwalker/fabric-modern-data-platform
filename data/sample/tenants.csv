@@ -1,0 +1,7 @@
+tenant_id,tenant_name,industry,tenant_status,tenant_start_date,updated_at
+201,Northstar Fitness,Fitness,Active,2020-05-01,2026-06-01T10:00:00
+202,Pacific Dental Group,Healthcare,Active,2021-02-15,2026-06-01T10:05:00
+203,Bluewave Consulting,Professional Services,Active,2022-09-01,2026-06-01T10:10:00
+204,Harbor Cafe,Restaurant,Active,2019-11-20,2026-06-01T10:15:00
+205,Sunrise Logistics,Logistics,Active,2023-04-01,2026-06-01T10:20:00
+206,Coastal Pharmacy,Retail,Active,2024-01-10,2026-06-01T10:25:00

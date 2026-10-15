@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local PySpark test runs
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Secrets
+.env
+secrets.json
+credentials.json
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Local study material, kept on this machine only
+docs/fabric-modern-data-platform-study-guide.md
+docs/fabric-getting-started.md
+docs/fabric-data-pipeline.md
+docs/fabric-deployment-pipeline.md
+docs/fabric-git-integration.md
+powerbi/semantic-model/build-guide.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+
+# Power BI local artifacts
+*.pbix
+*.pbit

@@ -1,0 +1,13 @@
+{
+  "landing_root": "Files/landing",
+  "sources": [
+    {"name": "properties", "source_system": "CRE_SQL", "source_object": "properties", "format": "csv", "path": "sample/properties.csv", "load_type": "full"},
+    {"name": "tenants", "source_system": "CRE_SQL", "source_object": "tenants", "format": "csv", "path": "sample/tenants.csv", "load_type": "full"},
+    {"name": "leases", "source_system": "CRE_SQL", "source_object": "leases", "format": "csv", "path": "sample/leases.csv", "load_type": "full"},
+    {"name": "rent_payments", "source_system": "CRE_SQL", "source_object": "rent_payments", "format": "csv", "path": "sample/rent_payments.csv", "load_type": "full"},
+    {"name": "maintenance_requests", "source_system": "CRE_SQL", "source_object": "maintenance_requests", "format": "csv", "path": "sample/maintenance_requests.csv", "load_type": "full"},
+    {"name": "property_budget", "source_system": "BusinessFiles", "source_object": "property_budget.csv", "format": "csv", "path": "sample/property_budget.csv", "load_type": "full"},
+    {"name": "property_region_mapping", "source_system": "BusinessFiles", "source_object": "property_region_mapping.csv", "format": "csv", "path": "sample/property_region_mapping.csv", "load_type": "full"},
+    {"name": "weather_api_raw", "source_system": "OpenWeather", "source_object": "weather", "format": "json", "path": "api_sample/openweather_sample_response.json", "load_type": "full"}
+  ]
+}

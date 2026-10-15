@@ -1,0 +1,101 @@
+{
+  "note": "Record of how each per-stage setting is applied in dp-cre-modernization. Fabric does not read this file. Deployment rules are created in the deployment pipeline's interface, by the item's owner, after the item's first deployment to that stage; here they are fallbacks for when automatic rebinding doesn't happen. Variable library values are set in vl_cre_settings value sets. Stage values are labels; Fabric shows Lakehouses by name or asks for IDs. See docs/deployment.md.",
+  "rules": [
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "environment",
+      "dev": "dev",
+      "test": "test",
+      "prod": "prod",
+      "mechanism": "Variable library vl_cre_settings, variable environment (Data Pipelines have no deployment rules)"
+    },
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "workspace",
+      "dev": "ws-cre-modernization-dev ID",
+      "test": "ws-cre-modernization-test ID",
+      "prod": "ws-cre-modernization-prod ID",
+      "mechanism": "Variable library vl_cre_settings, variable workspace; used by refresh_semantic_model"
+    },
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "semantic-model",
+      "dev": "CRE Portfolio Analytics ID in ws-cre-modernization-dev",
+      "test": "CRE Portfolio Analytics ID in ws-cre-modernization-test",
+      "prod": "CRE Portfolio Analytics ID in ws-cre-modernization-prod",
+      "mechanism": "Variable library vl_cre_settings, variable semantic-model; used by refresh_semantic_model"
+    },
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "refresh_connection",
+      "dev": "conn_cre_semantic_model_spn",
+      "test": "conn_cre_semantic_model_spn",
+      "prod": "conn_cre_semantic_model_spn",
+      "mechanism": "Same tenant connection in every stage, so deployment never changes it; conn_cre_semantic_model until the service principal exists"
+    },
+    {
+      "artifact": "nb_cre_bronze_ingest",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze",
+      "mechanism": "Automatic rebinding (verified in Test); deployment rule Default lakehouse if it doesn't happen"
+    },
+    {
+      "artifact": "nb_cre_silver_transform",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze",
+      "mechanism": "Automatic rebinding (verified in Test); deployment rule Default lakehouse if it doesn't happen"
+    },
+    {
+      "artifact": "nb_cre_gold_build_model",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze",
+      "mechanism": "Automatic rebinding (verified in Test); deployment rule Default lakehouse if it doesn't happen"
+    },
+    {
+      "artifact": "nb_cre_gold_validate_model",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze",
+      "mechanism": "Automatic rebinding (verified in Test); deployment rule Default lakehouse if it doesn't happen"
+    },
+    {
+      "artifact": "nb_cre_gold_log_pipeline_run",
+      "property": "default_lakehouse",
+      "dev": "ws-cre-modernization-dev/lh_cre_bronze",
+      "test": "ws-cre-modernization-test/lh_cre_bronze",
+      "prod": "ws-cre-modernization-prod/lh_cre_bronze",
+      "mechanism": "Automatic rebinding (verified in Test); deployment rule Default lakehouse if it doesn't happen"
+    },
+    {
+      "artifact": "CRE Portfolio Analytics",
+      "property": "gold_lakehouse_binding",
+      "dev": "ws-cre-modernization-dev/lh_cre_gold",
+      "test": "ws-cre-modernization-test/lh_cre_gold",
+      "prod": "ws-cre-modernization-prod/lh_cre_gold",
+      "mechanism": "Automatic rebinding when the model is deployed after the stage's lh_cre_gold exists (verified in Test); deployment rule Data source rules if it doesn't happen"
+    },
+    {
+      "artifact": "pl_cre_end_to_end",
+      "property": "schedule_enabled",
+      "dev": false,
+      "test": false,
+      "prod": true,
+      "mechanism": "Set by hand in each workspace (schedules are not deployed)"
+    },
+    {
+      "artifact": "CRE Portfolio Analytics",
+      "property": "direct_lake_automatic_updates",
+      "dev": false,
+      "test": false,
+      "prod": false,
+      "mechanism": "Set by hand in each stage's semantic model settings (model settings are not deployed)"
+    }
+  ]
+}

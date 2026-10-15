@@ -1,0 +1,213 @@
+-- Paste this script into Power BI DAX Query View, then use "Update model with changes".
+-- Then set each measure's format string from its "Format:" comment and move it into the
+-- display folder named in the section header above it. "Text" needs no format string.
+DEFINE
+    -- ===== Display folder: Collections =====
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_rent_payment'[Total Rent Due] =
+        SUM('fact_rent_payment'[amount_due])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_rent_payment'[Total Rent Collected] =
+        SUM('fact_rent_payment'[amount_paid])
+
+    -- Format: $#,0;($#,0);$0
+    MEASURE 'fact_rent_payment'[Outstanding Rent] =
+        SUM('fact_rent_payment'[outstanding_amount])
+
+    -- Format: 0.0%
+    MEASURE 'fact_rent_payment'[Collection Rate] =
+        DIVIDE([Total Rent Collected], [Total Rent Due], 0)
+
+    -- Format: #,0
+    MEASURE 'fact_rent_payment'[Payment Count] =
+        DISTINCTCOUNT('fact_rent_payment'[payment_key])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_rent_payment'[Rent Collected YTD] =
+        TOTALYTD([Total Rent Collected], 'dim_date'[full_date])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_rent_payment'[Rent Collected Prior Year] =
+        CALCULATE([Total Rent Collected], SAMEPERIODLASTYEAR('dim_date'[full_date]))
+
+    -- Format: 0.0%
+    MEASURE 'fact_rent_payment'[Rent Collected YoY %] =
+        VAR PriorYear = [Rent Collected Prior Year]
+        RETURN DIVIDE([Total Rent Collected] - PriorYear, PriorYear)
+
+    -- Paid in full can still mean paid late; this shows collection timeliness beside the collection rate.
+    -- Format: #,0
+    MEASURE 'fact_rent_payment'[Late Payments] =
+        CALCULATE([Payment Count], KEEPFILTERS('fact_rent_payment'[payment_status] = "Late"))
+
+    -- Format: 0.0%
+    MEASURE 'fact_rent_payment'[Late Payment Rate] =
+        DIVIDE([Late Payments], [Payment Count])
+
+    -- ===== Display folder: Leasing =====
+
+    -- Format: #,0
+    MEASURE 'fact_lease'[Lease Count] =
+        DISTINCTCOUNT('fact_lease'[lease_key])
+
+    -- Format: #,0
+    MEASURE 'fact_lease'[Active Lease Count] =
+        CALCULATE([Lease Count], KEEPFILTERS('fact_lease'[lease_status] = "Active"))
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_lease'[Monthly Contracted Rent] =
+        SUM('fact_lease'[monthly_rent])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_lease'[Annualized Contracted Rent] =
+        SUM('fact_lease'[annualized_rent])
+
+    -- Format: #,0
+    MEASURE 'fact_lease'[Leases Ending] =
+        CALCULATE(
+            [Lease Count],
+            USERELATIONSHIP('dim_date'[date_key], 'fact_lease'[lease_end_date_key])
+        )
+
+    -- ===== Display folder: Maintenance =====
+
+    -- Format: #,0
+    MEASURE 'fact_maintenance_request'[Maintenance Request Count] =
+        DISTINCTCOUNT('fact_maintenance_request'[maintenance_key])
+
+    -- Format: #,0
+    MEASURE 'fact_maintenance_request'[Open Maintenance Requests] =
+        CALCULATE(
+            [Maintenance Request Count],
+            KEEPFILTERS('fact_maintenance_request'[status] = "Open")
+        )
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_maintenance_request'[Estimated Maintenance Cost] =
+        SUM('fact_maintenance_request'[estimated_cost])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_maintenance_request'[Actual Maintenance Cost] =
+        SUM('fact_maintenance_request'[actual_cost])
+
+    -- Row-level variance is null until an actual cost exists, so open or uncosted
+    -- requests are excluded instead of reading as a full negative variance.
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_maintenance_request'[Maintenance Cost Variance] =
+        SUM('fact_maintenance_request'[cost_variance])
+
+    -- Format: 0.0
+    MEASURE 'fact_maintenance_request'[Average Resolution Days] =
+        AVERAGE('fact_maintenance_request'[resolution_days])
+
+    -- Format: #,0
+    MEASURE 'fact_maintenance_request'[Completed Maintenance Requests] =
+        CALCULATE(
+            [Maintenance Request Count],
+            USERELATIONSHIP('dim_date'[date_key], 'fact_maintenance_request'[completed_date_key])
+        )
+
+    -- ===== Display folder: Budget =====
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_property_budget'[Budget Revenue] =
+        SUM('fact_property_budget'[budget_revenue])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_property_budget'[Budget Expense] =
+        SUM('fact_property_budget'[budget_expense])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_property_budget'[Budget NOI] =
+        SUM('fact_property_budget'[budget_noi])
+
+    -- Format: $#,0;($#,0);-
+    MEASURE 'fact_property_budget'[Rent to Budget Variance] =
+        [Total Rent Collected] - [Budget Revenue]
+
+    -- Format: 0.0%
+    MEASURE 'fact_property_budget'[Rent to Budget Variance %] =
+        DIVIDE([Rent to Budget Variance], [Budget Revenue])
+
+    -- ===== Display folder: Portfolio =====
+
+    -- Format: #,0
+    MEASURE 'dim_property'[Property Count] =
+        CALCULATE(
+            DISTINCTCOUNT('dim_property'[property_key]),
+            'dim_property'[property_key] <> 0
+        )
+
+    -- Format: #,0
+    MEASURE 'dim_tenant'[Tenant Count] =
+        CALCULATE(
+            DISTINCTCOUNT('dim_tenant'[tenant_key]),
+            'dim_tenant'[tenant_key] <> 0
+        )
+
+    -- ===== Display folder: Data Quality =====
+
+    -- Payments whose keys resolved to the Unknown member (key 0). "+ 0" shows a passing check as 0, not blank.
+    -- Format: #,0
+    MEASURE 'fact_rent_payment'[Unknown Property Payments] =
+        CALCULATE([Payment Count], KEEPFILTERS('fact_rent_payment'[property_key] = 0)) + 0
+
+    -- Format: #,0
+    MEASURE 'fact_rent_payment'[Unknown Tenant Payments] =
+        CALCULATE([Payment Count], KEEPFILTERS('fact_rent_payment'[tenant_key] = 0)) + 0
+
+    -- Format: yyyy-mm-dd hh:nn
+    MEASURE 'fact_rent_payment'[Latest Silver Processing Time] =
+        MAX('fact_rent_payment'[silver_processed_timestamp])
+
+    -- Pipeline health from audit.pipeline_runs, a disconnected table with one row per run.
+    -- Format: #,0
+    MEASURE 'pipeline_runs'[Pipeline Run Count] =
+        COUNTROWS('pipeline_runs')
+
+    -- Format: #,0
+    MEASURE 'pipeline_runs'[Failed Pipeline Runs] =
+        CALCULATE([Pipeline Run Count], KEEPFILTERS('pipeline_runs'[status] = "Failed"))
+
+    -- Format: 0.0%
+    MEASURE 'pipeline_runs'[Pipeline Run Success Rate] =
+        DIVIDE([Pipeline Run Count] - [Failed Pipeline Runs], [Pipeline Run Count])
+
+    -- Format: yyyy-mm-dd hh:nn
+    MEASURE 'pipeline_runs'[Latest Run Logged At] =
+        MAX('pipeline_runs'[logged_at])
+
+    -- Format: Text
+    MEASURE 'pipeline_runs'[Latest Run Status] =
+        VAR LatestLoggedAt = [Latest Run Logged At]
+        RETURN
+            CALCULATE(MAX('pipeline_runs'[status]), 'pipeline_runs'[logged_at] = LatestLoggedAt)
+
+    -- Format: Text
+    MEASURE 'pipeline_runs'[Latest Run ID] =
+        VAR LatestLoggedAt = [Latest Run Logged At]
+        RETURN
+            CALCULATE(MAX('pipeline_runs'[pipeline_run_id]), 'pipeline_runs'[logged_at] = LatestLoggedAt)
+
+    -- Conditional-formatting color for run status: each row's status in a table, the latest run's status in a card.
+    -- Format: Text
+    MEASURE 'pipeline_runs'[Status Color] =
+        VAR RunStatus =
+            IF(
+                HASONEVALUE('pipeline_runs'[status]),
+                SELECTEDVALUE('pipeline_runs'[status]),
+                [Latest Run Status]
+            )
+        RETURN
+            SWITCH(RunStatus, "Succeeded", "#237A57", "Failed", "#B84A4A", "#6F7F52")
+
+EVALUATE
+    ROW(
+        "Total Rent Due", [Total Rent Due],
+        "Total Rent Collected", [Total Rent Collected],
+        "Collection Rate", [Collection Rate],
+        "Lease Count", [Lease Count],
+        "Maintenance Requests", [Maintenance Request Count]
+    )
